@@ -1,0 +1,374 @@
+openapi: 3.0.1
+info:
+  description: |
+    ## Usage
+    ## List of all custom errors
+    First number is HTTP Status code, second is value of "code" field in returned JSON object, text description may or may not match "message" field in returned JSON object.
+    - 422.1000: wrong coordinates
+    - 422.1001: wrong depth
+    - 409.1002: no more active licenses allowed
+    - 409.1003: treasure is not digged
+  title: HighLoad Cup 2021
+  version: 1.0.0
+servers:
+- url: /
+paths:
+  /health-check:
+    get:
+      description: Returns 200 if service works okay.
+      operationId: healthCheck
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: object
+                type: object
+          description: Extra details about service status, if any.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: General errors using same model as used by go-swagger for validation
+            errors.
+  /balance:
+    get:
+      description: Returns a current balance.
+      operationId: getBalance
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/balance'
+          description: Current balance.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: General errors using same model as used by go-swagger for validation
+            errors.
+  /licenses:
+    get:
+      description: Returns a list of issued licenses.
+      operationId: listLicenses
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/licenseList'
+          description: List of issued licenses.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: General errors using same model as used by go-swagger for validation
+            errors.
+    post:
+      description: Issue a new license.
+      operationId: issueLicense
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/wallet'
+        description: Amount of money to spend for a license. Empty array for get free
+          license. Maximum 10 active licenses
+        required: false
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/license'
+          description: Issued license.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: |
+            - 409.1002: no more active licenses allowed
+      x-codegen-request-body-name: args
+  /explore:
+    post:
+      description: Returns amount of treasures in the provided area at full depth.
+      operationId: exploreArea
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/area'
+        description: Area to be explored.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/report'
+          description: Report about found treasures.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: |
+            - 422.1000: wrong coordinates
+      x-codegen-request-body-name: args
+  /dig:
+    post:
+      description: Dig at given point and depth, returns found treasures.
+      operationId: dig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/dig'
+        description: License, place and depth to dig.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/treasureList'
+          description: List of treasures found.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: |
+            - 422.1000: wrong coordinates
+            - 422.1001: wrong depth
+      x-codegen-request-body-name: args
+  /cash:
+    post:
+      description: Exchange provided treasure for money.
+      operationId: cash
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/treasure'
+        description: Treasure for exchange.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/wallet'
+          description: Payment for treasure.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+          description: |
+            - 409.1003: treasure is not digged
+      x-codegen-request-body-name: args
+components:
+  responses:
+    balance:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/balance'
+      description: Current balance.
+    cash:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/wallet'
+      description: Payment for treasure.
+    dig:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/treasureList'
+      description: List of treasures found.
+    error:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+      description: General errors using same model as used by go-swagger for validation
+        errors.
+    explore:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/report'
+      description: Report about found treasures.
+    license:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/license'
+      description: Issued license.
+    licenseList:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/licenseList'
+      description: List of issued licenses.
+  schemas:
+    error:
+      description: |
+        This model should match output of errors returned by go-swagger
+        (like failed validation), to ensure our handlers use same format.
+      properties:
+        code:
+          description: Either same as HTTP Status Code OR >= 600 with HTTP Status
+            Code 422
+          format: int32
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - message
+      type: object
+    balance:
+      description: Current balance and wallet with up to 1000 coins.
+      example:
+        wallet:
+        - 6
+        - 6
+        - 6
+        - 6
+        - 6
+        balance: 0
+      properties:
+        balance:
+          format: uint32
+          type: integer
+        wallet:
+          description: Wallet with some coins.
+          items:
+            format: uint32
+            type: integer
+          maxItems: 1000
+          type: array
+          uniqueItems: true
+      required:
+      - balance
+      - wallet
+      type: object
+    wallet:
+      description: Wallet with some coins.
+      items:
+        format: uint32
+        type: integer
+      maxItems: 1000
+      type: array
+      uniqueItems: true
+    amount:
+      description: Non-negative amount of treasures/etc.
+      minimum: 0
+      type: integer
+    license:
+      description: License for digging.
+      example:
+        digUsed: 0
+        digAllowed: 0
+        id: 0
+      properties:
+        id:
+          type: integer
+        digAllowed:
+          description: Non-negative amount of treasures/etc.
+          minimum: 0
+          type: integer
+        digUsed:
+          description: Non-negative amount of treasures/etc.
+          minimum: 0
+          type: integer
+      required:
+      - digAllowed
+      - digUsed
+      - id
+      type: object
+    licenseList:
+      description: List of issued licenses.
+      items:
+        $ref: '#/components/schemas/license'
+      type: array
+    area:
+      example:
+        posX: 0
+        posY: 0
+        sizeX: 1
+        sizeY: 1
+      properties:
+        posX:
+          minimum: 0
+          type: integer
+        posY:
+          minimum: 0
+          type: integer
+        sizeX:
+          minimum: 1
+          type: integer
+        sizeY:
+          minimum: 1
+          type: integer
+      required:
+      - posX
+      - posY
+      type: object
+    report:
+      example:
+        area:
+          posX: 0
+          posY: 0
+          sizeX: 1
+          sizeY: 1
+        amount: 0
+      properties:
+        area:
+          $ref: '#/components/schemas/area'
+        amount:
+          description: Non-negative amount of treasures/etc.
+          minimum: 0
+          type: integer
+      required:
+      - amount
+      - area
+      type: object
+    dig:
+      properties:
+        licenseID:
+          description: ID of the license this request is attached to.
+          type: integer
+        posX:
+          minimum: 0
+          type: integer
+        posY:
+          minimum: 0
+          type: integer
+        depth:
+          maximum: 1E+2
+          minimum: 1
+          type: integer
+      required:
+      - depth
+      - licenseID
+      - posX
+      - posY
+      type: object
+    treasure:
+      description: Treasure ID.
+      type: string
+    treasureList:
+      description: List of treasures.
+      items:
+        $ref: '#/components/schemas/treasure'
+      type: array
