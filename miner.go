@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"github.com/antihax/optional"
 	openapi "github.com/rannoch/highloadcup2021/client"
 	"sync"
 	"time"
@@ -15,27 +13,31 @@ type Miner struct {
 	balance  openapi.Balance
 	licenses map[licenseId]openapi.License
 
-	client *openapi.APIClient
-	mutex  sync.Mutex
+	client *Client
+	mutex  sync.RWMutex
 }
 
-func NewMiner(client *openapi.APIClient) *Miner {
+func NewMiner(client *Client) *Miner {
 	m := &Miner{client: client}
 	m.licenses = make(map[licenseId]openapi.License)
 
 	return m
 }
 
-func (miner *Miner) licenseIssuer(ctx context.Context) {
+func (miner *Miner) licenseIssuer() {
 	for {
-		if len(miner.licenses) < 10 {
-			license, response, err := miner.client.DefaultApi.IssueLicense(ctx, &openapi.IssueLicenseOpts{Args: optional.NewInterface(miner.popCoin())})
-			if response != nil && response.StatusCode >= 500 {
+		miner.mutex.RLock()
+		licensesLen := len(miner.licenses)
+		miner.mutex.RUnlock()
+
+		if licensesLen < 10 {
+			license, responseCode, err := miner.client.IssueLicense(miner.popCoin())
+			if responseCode >= 500 {
 				continue
 			}
 
-			if response != nil && response.StatusCode == 409 {
-				miner.syncLicenseList(ctx)
+			if responseCode == 409 {
+				miner.syncLicenseList()
 				continue
 			}
 
@@ -50,9 +52,33 @@ func (miner *Miner) licenseIssuer(ctx context.Context) {
 	}
 }
 
-func (miner *Miner) syncLicenseList(ctx context.Context) {
+func (miner *Miner) cashier(c <-chan string) {
 	for {
-		licenses, _, err := miner.client.DefaultApi.ListLicenses(ctx)
+		select {
+		case treasure := <-c:
+			for {
+				cash, _, err := miner.client.Cash(fmt.Sprintf("\"%s\"", treasure))
+				if err != nil {
+					continue
+				}
+
+				miner.mutex.Lock()
+				miner.balance.Wallet = append(miner.balance.Wallet, cash...)
+
+				if len(miner.balance.Wallet) > 100 {
+					miner.balance.Wallet = miner.balance.Wallet[:100]
+				}
+				miner.balance.Balance += int32(len(cash))
+				miner.mutex.Unlock()
+				break
+			}
+		}
+	}
+}
+
+func (miner *Miner) syncLicenseList() {
+	for {
+		licenses, _, err := miner.client.ListLicenses()
 		if err == nil {
 			miner.mutex.Lock()
 			miner.licenses = make(map[licenseId]openapi.License, len(licenses))
@@ -68,29 +94,44 @@ func (miner *Miner) syncLicenseList(ctx context.Context) {
 
 func (miner *Miner) getRandomLicense() licenseId {
 	for {
-		if len(miner.licenses) == 0 {
+		miner.mutex.RLock()
+		licensesLen := len(miner.licenses)
+		miner.mutex.RUnlock()
+
+		if licensesLen == 0 {
 			continue
 		}
 
-		miner.mutex.Lock()
 		var max int32 = 0
 		var maxLicenseId int32 = 0
 
-		for licenseId, license := range miner.licenses {
+		for licenseId, license := range miner.getLicenses() {
 			if license.DigAllowed-license.DigUsed > max {
 				max = license.DigAllowed - license.DigUsed
 				maxLicenseId = licenseId
 			}
 		}
 
-		miner.mutex.Unlock()
-
 		return maxLicenseId
 	}
 }
 
+func (miner *Miner) getLicenses() map[licenseId]openapi.License {
+	miner.mutex.RLock()
+	defer miner.mutex.RUnlock()
+
+	var licenses = make(map[licenseId]openapi.License, len(miner.licenses))
+
+	for id, license := range miner.licenses {
+		licenses[id] = license
+	}
+
+	return licenses
+}
+
 func (miner *Miner) useLicense(id licenseId) {
 	miner.mutex.Lock()
+	defer miner.mutex.Unlock()
 	license := miner.licenses[id]
 	license.DigUsed++
 
@@ -99,33 +140,38 @@ func (miner *Miner) useLicense(id licenseId) {
 	} else {
 		miner.licenses[id] = license
 	}
-	miner.mutex.Unlock()
 }
 
 func (miner *Miner) deleteLicense(id licenseId) {
 	miner.mutex.Lock()
+	defer miner.mutex.Unlock()
 	delete(miner.licenses, id)
-	miner.mutex.Unlock()
 }
 
 func (miner *Miner) popCoin() []int32 {
-	if len(miner.balance.Wallet) == 0 {
+	miner.mutex.RLock()
+	wallenLen := len(miner.balance.Wallet)
+	miner.mutex.RUnlock()
+
+	if wallenLen == 0 {
 		return []int32{}
 	}
 
-	coin := miner.balance.Wallet[len(miner.balance.Wallet)-1]
+	miner.mutex.RLock()
+	coin := miner.balance.Wallet[wallenLen-1]
+	miner.mutex.RUnlock()
 
 	miner.mutex.Lock()
-	miner.balance.Wallet = miner.balance.Wallet[:len(miner.balance.Wallet)-1]
+	miner.balance.Wallet = miner.balance.Wallet[:wallenLen-1]
 	miner.mutex.Unlock()
 
 	return []int32{coin}
 }
 
-func (miner *Miner) healthCheck(ctx context.Context) {
+func (miner *Miner) healthCheck() {
 	for {
-		_, response, _ := miner.client.DefaultApi.HealthCheck(ctx)
-		if response != nil && response.StatusCode == 200 {
+		responseCode, _ := miner.client.HealthCheck()
+		if responseCode == 200 {
 			break
 		}
 
@@ -134,21 +180,21 @@ func (miner *Miner) healthCheck(ctx context.Context) {
 }
 
 func (miner *Miner) startWorker(
-	ctx context.Context,
 	fromX, toX, fromY, toY, size int32,
 	wg *sync.WaitGroup,
+	cashierChan chan<- string,
 ) {
 	defer wg.Done()
 
 	for x := fromX; x < toX; x += size {
 		for y := fromY; y < toY; y += size {
-			area, response, err := miner.client.DefaultApi.ExploreArea(ctx, openapi.Area{
+			area, responseCode, err := miner.client.ExploreArea(openapi.Area{
 				PosX:  x,
 				PosY:  y,
 				SizeX: size,
 				SizeY: size,
 			})
-			if err != nil || response.StatusCode != 200 || area.Amount == 0 {
+			if err != nil || responseCode != 200 || area.Amount == 0 {
 				continue
 			}
 
@@ -168,30 +214,30 @@ func (miner *Miner) startWorker(
 							licenseId := miner.getRandomLicense()
 
 							// dig
-							treasures, digResp, err := miner.client.DefaultApi.Dig(ctx, openapi.Dig{
+							treasures, digRespCode, err := miner.client.Dig(openapi.Dig{
 								LicenseID: licenseId,
 								PosX:      xDig,
 								PosY:      yDig,
 								Depth:     depth,
 							})
 
-							if digResp != nil && digResp.StatusCode == 403 {
+							if digRespCode == 403 {
 								miner.deleteLicense(licenseId)
 								continue
 							}
 
-							if digResp != nil && digResp.StatusCode >= 500 {
+							if digRespCode >= 500 {
 								continue
 							}
 
 							depth++
 							miner.useLicense(licenseId)
 
-							if digResp != nil && digResp.StatusCode == 404 {
+							if digRespCode == 404 {
 								continue
 							}
 
-							if digResp != nil && digResp.StatusCode == 422 {
+							if digRespCode == 422 {
 								continue
 							}
 
@@ -201,23 +247,8 @@ func (miner *Miner) startWorker(
 
 							if len(treasures) > 0 {
 								for _, treasure := range treasures {
-									for {
-										cash, _, err := miner.client.DefaultApi.Cash(ctx, fmt.Sprintf("\"%s\"", treasure))
-										if err != nil {
-											continue
-										}
-										left = left - 1
-
-										miner.mutex.Lock()
-										miner.balance.Wallet = append(miner.balance.Wallet, cash...)
-
-										if len(miner.balance.Wallet) > 100 {
-											miner.balance.Wallet = miner.balance.Wallet[:100]
-										}
-										miner.balance.Balance += int32(len(cash))
-										miner.mutex.Unlock()
-										break
-									}
+									cashierChan <- treasure
+									left--
 								}
 							}
 						}
@@ -229,10 +260,14 @@ func (miner *Miner) startWorker(
 
 }
 
-func (miner *Miner) Start(ctx context.Context) error {
-	miner.healthCheck(ctx)
+func (miner *Miner) Start() error {
+	miner.healthCheck()
 
-	go miner.licenseIssuer(ctx)
+	go miner.licenseIssuer()
+
+	var cashierChan = make(chan string, 1000)
+
+	go miner.cashier(cashierChan)
 
 	wg := sync.WaitGroup{}
 
@@ -250,7 +285,7 @@ func (miner *Miner) Start(ctx context.Context) error {
 		fromY = int32(i/2) * yStep
 		toY = int32(i/2+1) * yStep
 
-		go miner.startWorker(ctx, fromX, toX, fromY, toY, 1, &wg)
+		go miner.startWorker(fromX, toX, fromY, toY, 1, &wg, cashierChan)
 	}
 
 	wg.Wait()

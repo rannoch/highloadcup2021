@@ -9,6 +9,8 @@ if __name__ == '__main__':
     print(np.max(arr))
     print(np.min(arr))
 
+    arr = np.sort(arr)
+
     plt.plot(arr)
     plt.show()
 

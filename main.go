@@ -1,19 +1,17 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"github.com/rannoch/highloadcup2021/client"
+	"github.com/valyala/fasthttp"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"time"
 )
 
 func main() {
-	configuration := openapi.NewConfiguration()
-
 	getenv := os.Getenv("ADDRESS")
 	if getenv == "" {
 		getenv = "localhost"
@@ -25,15 +23,19 @@ func main() {
 	}
 	urlParsed.Scheme = "http"
 
-	configuration.BasePath = urlParsed.String()
-	configuration.HTTPClient = &http.Client{
-		Timeout: 5 * time.Second,
-	}
-	//configuration.Debug = true
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
-	apiClient := openapi.NewAPIClient(configuration)
+	client := &fasthttp.Client{
+		ReadTimeout:     5 * time.Second,
+		WriteTimeout:    5 * time.Second,
+		MaxConnsPerHost: 100,
+	}
+	apiClient := NewClient(client, urlParsed.String())
+
 	miner := NewMiner(apiClient)
 
-	err = miner.Start(context.Background())
+	err = miner.Start()
 	fmt.Println(err)
 }
