@@ -119,3 +119,44 @@ Layer#	Tot.treas	Tot.treas.val	Avg.treas.val	Treas.dens	Treas.val.dens
     10	    87315	      6159289	        70.54	   0.00713	       0.50280
 Final balance: 53214
 </pre>
+
+<pre>
+*** CLIENT REPORT ***
+Balance:	84602
+Licenses active:	10
+Free licenses issued:	8
+Paid licenses issued:	2571
+Single cell explores done:	1510
+Single cell explores with treasures found:	781
+Single cell explore treasure found rate:	0.51722
+Digs done:	12863
+Dig success rate:	0.13550
+Treasures found:	1743
+Total found treasure value:	87173
+Treasures exchanged:	1743
+Total exchanged treasure value:	87173
+Treasure exchange efficiency:	1.00000
+Treasures not exchanged:	0127.0.0.1 - - [26/Feb/2021 07:39:52] "POST /explore HTTP/1.1" 200 -
+
+
+*** WORLD REPORT ***
+Configuration:	3500 x 3500 x 10
+Total treasures:	480434
+Total treasure value:	23781007
+Avg treasure value:	49.50
+Treasure density:	0.00392
+Treasure value density:	0.19413
+* LAYER STATS *
+Layer#	Tot.treas	Tot.treas.val	Avg.treas.val	Treas.dens	Treas.val.dens
+     1	     8300	        58941	         7.10	   0.00068	       0.00481
+     2	    17084	       243347	        14.24	   0.00139	       0.01987
+     3	    26083	       552591	        21.19	   0.00213	       0.04511
+     4	    34632	       979641	        28.29	   0.00283	       0.07997
+     5	    43961	      1545995	        35.17	   0.00359	       0.12620
+     6	    52395	      2215504	        42.28	   0.00428	       0.18086
+     7	    61869	      3064731	        49.54	   0.00505	       0.25018
+     8	    69821	      3933865	        56.34	   0.00570	       0.32113
+     9	    79099	      5037553	        63.69	   0.00646	       0.41123
+    10	    87190	      6148839	        70.52	   0.00712	       0.50195
+Final balance: 84602
+</pre>
