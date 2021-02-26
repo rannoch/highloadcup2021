@@ -28,13 +28,13 @@ func main() {
 	}()
 
 	client := &fasthttp.Client{
-		ReadTimeout:     5 * time.Second,
-		WriteTimeout:    5 * time.Second,
 		MaxConnsPerHost: 100,
+		ReadTimeout:     20 * time.Second,
+		WriteTimeout:    20 * time.Second,
 	}
 	apiClient := NewClient(client, urlParsed.String())
 
-	miner := NewMiner(apiClient)
+	miner := NewMiner(apiClient, 5, 10)
 
 	err = miner.Start()
 	fmt.Println(err)
