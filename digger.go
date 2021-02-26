@@ -1,6 +1,8 @@
 package main
 
-import openapi "github.com/rannoch/highloadcup2021/client"
+import (
+	openapi "github.com/rannoch/highloadcup2021/client"
+)
 
 type Digger struct {
 	client *Client

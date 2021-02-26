@@ -31,9 +31,9 @@ func main() {
 		//WriteTimeout:    20 * time.Second,
 	}
 	apiClient := NewClient(client, urlParsed.String())
-	apiClient.Debug = true
+	//apiClient.Debug = true
 
-	miner := NewMiner(apiClient, 5)
+	miner := NewMiner(apiClient, 1)
 
 	err = miner.Start()
 	fmt.Println(err)
