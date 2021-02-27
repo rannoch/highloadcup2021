@@ -8,7 +8,6 @@ import (
 	_ "net/http/pprof"
 	"net/url"
 	"os"
-	"time"
 )
 
 func main() {
@@ -34,7 +33,7 @@ func main() {
 	}
 	apiClient := NewClient(client, urlParsed.String())
 	//apiClient.Debug = true
-	apiClient.Slowlog = time.Second
+	//apiClient.Slowlog = time.Second
 
 	miner := NewMiner(apiClient, 5)
 

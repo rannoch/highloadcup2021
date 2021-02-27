@@ -88,14 +88,9 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 	var inChan = make(chan *ReportTree, 1000)
 	var outChan = make(chan *ReportTree)
 
-	var sortChan = make(chan interface{})
-	var reCalcTreeChan = make(chan *ReportTree, 1000)
-
 	go func(
 		inChan <-chan *ReportTree,
-		sortChan <-chan interface{},
 		outChan chan<- *ReportTree,
-		reCalcTreeChan <-chan *ReportTree,
 	) {
 		var reportTreesSortedByDensity []*ReportTree
 		reportTreesSortedByDensity = append(reportTreesSortedByDensity, rootReportTree.Children...)
@@ -108,19 +103,9 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 				sortTree(reportTreesSortedByDensity)
 			case outChan <- reportTreesSortedByDensity[0]:
 				reportTreesSortedByDensity = reportTreesSortedByDensity[1:]
-			case <-sortChan:
-				sortTree(reportTreesSortedByDensity)
-			case reCalcTree := <-reCalcTreeChan:
-				tree := reCalcTree
-				for tree != nil {
-					tree.setAmount(tree.Report.Amount - reCalcTree.Report.Amount)
-
-					tree = tree.Parent
-				}
-				sortTree(reportTreesSortedByDensity)
 			}
 		}
-	}(inChan, sortChan, outChan, reCalcTreeChan)
+	}(inChan, outChan)
 
 	workersCount := 5
 
@@ -129,9 +114,7 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 	for i := 0; i < workersCount; i++ {
 		go func(
 			inChan chan<- *ReportTree,
-			sortChan chan<- interface{},
 			outChan <-chan *ReportTree,
-			reCalcTreeChan chan<- *ReportTree,
 		) {
 			wg.Done()
 
@@ -150,14 +133,12 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 					densestTree.Neighbour.setAmount(densestTree.Parent.Report.Amount - densestTree.Report.Amount)
 				}
 
-				e.processTree(densestTree, inChan, reCalcTreeChan)
-				e.processTree(densestTree.Neighbour, inChan, reCalcTreeChan)
+				e.processTree(densestTree, inChan)
+				e.processTree(densestTree.Neighbour, inChan)
 			}
 		}(
 			inChan,
-			sortChan,
 			outChan,
-			reCalcTreeChan,
 		)
 	}
 }
@@ -175,7 +156,6 @@ func sortTree(reportTreesSortedByDensity []*ReportTree) {
 func (e *Explorer) processTree(
 	tree *ReportTree,
 	inChan chan<- *ReportTree,
-	reCalcTreeChan chan<- *ReportTree,
 ) {
 	if tree == nil {
 		return
@@ -185,7 +165,6 @@ func (e *Explorer) processTree(
 		// send to digger chan
 		e.treasureReportChan <- tree.Report
 
-		reCalcTreeChan <- tree
 		return
 	}
 
