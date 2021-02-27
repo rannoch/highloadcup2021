@@ -66,10 +66,10 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 	}
 
 	const xStep = 1750
-	const yStep = 350
+	const yStep = 7
 
 	// calculate initial
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 100; i++ {
 		area := openapi.Area{
 			PosX:  int32(i%2) * xStep,
 			PosY:  int32(i/2) * yStep,
