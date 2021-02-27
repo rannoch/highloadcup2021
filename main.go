@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"github.com/valyala/fasthttp"
 	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"time"
 )
 
 func main() {
@@ -21,9 +23,9 @@ func main() {
 	}
 	urlParsed.Scheme = "http"
 
-	//go func() {
-	//	log.Println(http.ListenAndServe("localhost:6060", nil))
-	//}()
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	client := &fasthttp.Client{
 		MaxConnsPerHost: 100,
@@ -32,8 +34,9 @@ func main() {
 	}
 	apiClient := NewClient(client, urlParsed.String())
 	//apiClient.Debug = true
+	apiClient.Slowlog = time.Second
 
-	miner := NewMiner(apiClient, 1)
+	miner := NewMiner(apiClient, 5)
 
 	err = miner.Start()
 	fmt.Println(err)

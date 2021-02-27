@@ -45,6 +45,8 @@ type ReportTree struct {
 	Parent *ReportTree
 
 	Children []*ReportTree
+
+	Neighbour *ReportTree
 }
 
 func (e *Explorer) Start(wg *sync.WaitGroup) {
@@ -103,15 +105,11 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 			case reportTree := <-inChan:
 				reportTreesSortedByDensity = append(reportTreesSortedByDensity, reportTree)
 
-				sort.Slice(reportTreesSortedByDensity, func(i, j int) bool {
-					return reportTreesSortedByDensity[i].Parent.Density > reportTreesSortedByDensity[j].Parent.Density
-				})
+				sortTree(reportTreesSortedByDensity)
 			case outChan <- reportTreesSortedByDensity[0]:
 				reportTreesSortedByDensity = reportTreesSortedByDensity[1:]
 			case <-sortChan:
-				sort.Slice(reportTreesSortedByDensity, func(i, j int) bool {
-					return reportTreesSortedByDensity[i].Parent.Density > reportTreesSortedByDensity[j].Parent.Density
-				})
+				sortTree(reportTreesSortedByDensity)
 			case reCalcTree := <-reCalcTreeChan:
 				tree := reCalcTree
 				for tree != nil {
@@ -119,9 +117,7 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 
 					tree = tree.Parent
 				}
-				sort.Slice(reportTreesSortedByDensity, func(i, j int) bool {
-					return reportTreesSortedByDensity[i].Parent.Density > reportTreesSortedByDensity[j].Parent.Density
-				})
+				sortTree(reportTreesSortedByDensity)
 			}
 		}
 	}(inChan, sortChan, outChan, reCalcTreeChan)
@@ -150,81 +146,12 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 				}
 
 				// update neighbour amount
-				if densestTree.Parent != nil && len(densestTree.Parent.Children) == 2 {
-					for _, child := range densestTree.Parent.Children {
-						if densestTree.Report != child.Report {
-							child.setAmount(densestTree.Parent.Report.Amount - densestTree.Report.Amount)
-							break
-						}
-					}
+				if densestTree.Neighbour != nil {
+					densestTree.Neighbour.setAmount(densestTree.Parent.Report.Amount - densestTree.Report.Amount)
 				}
 
-				if densestTree.Parent != nil {
-					for _, parentChild := range densestTree.Parent.Children {
-						if parentChild.Density >= 1 {
-							// send to digger chan
-							e.treasureReportChan <- parentChild.Report
-
-							reCalcTreeChan <- parentChild
-
-							continue
-						}
-
-						if parentChild.Density > 0 {
-							// set areas
-							if parentChild.Report.Area.SizeX >= parentChild.Report.Area.SizeY {
-								parentChild.Children = append(parentChild.Children, &ReportTree{
-									Report: openapi.Report{
-										Area: openapi.Area{
-											PosX:  parentChild.Report.Area.PosX,
-											PosY:  parentChild.Report.Area.PosY,
-											SizeX: parentChild.Report.Area.SizeX/2 + parentChild.Report.Area.SizeX%2,
-											SizeY: parentChild.Report.Area.SizeY,
-										},
-									},
-									Parent: parentChild,
-								})
-								parentChild.Children = append(parentChild.Children, &ReportTree{
-									Report: openapi.Report{
-										Area: openapi.Area{
-											PosX:  parentChild.Report.Area.PosX + parentChild.Children[0].Report.Area.SizeX,
-											PosY:  parentChild.Report.Area.PosY,
-											SizeX: parentChild.Report.Area.SizeX - parentChild.Children[0].Report.Area.SizeX,
-											SizeY: parentChild.Report.Area.SizeY,
-										},
-									},
-									Parent: parentChild,
-								})
-							} else {
-								parentChild.Children = append(parentChild.Children, &ReportTree{
-									Report: openapi.Report{
-										Area: openapi.Area{
-											PosX:  parentChild.Report.Area.PosX,
-											PosY:  parentChild.Report.Area.PosY + parentChild.Report.Area.SizeY/2,
-											SizeX: parentChild.Report.Area.SizeX,
-											SizeY: parentChild.Report.Area.SizeY/2 + parentChild.Report.Area.SizeY%2,
-										},
-									},
-									Parent: parentChild,
-								})
-
-								parentChild.Children = append(parentChild.Children, &ReportTree{
-									Report: openapi.Report{
-										Area: openapi.Area{
-											PosX:  parentChild.Report.Area.PosX,
-											PosY:  parentChild.Report.Area.PosY,
-											SizeX: parentChild.Report.Area.SizeX,
-											SizeY: parentChild.Report.Area.SizeY - parentChild.Children[0].Report.Area.SizeY,
-										},
-									},
-									Parent: parentChild,
-								})
-							}
-
-							inChan <- parentChild.Children[0]
-						}
-					}
-				}
+				e.processTree(densestTree, inChan, reCalcTreeChan)
+				e.processTree(densestTree.Neighbour, inChan, reCalcTreeChan)
 			}
 		}(
 			inChan,
@@ -232,5 +159,90 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 			outChan,
 			reCalcTreeChan,
 		)
+	}
+}
+
+func sortTree(reportTreesSortedByDensity []*ReportTree) {
+	sort.Slice(reportTreesSortedByDensity, func(i, j int) bool {
+		if reportTreesSortedByDensity[i].Parent.Density == 0 {
+			return true
+		}
+
+		return reportTreesSortedByDensity[i].Parent.Density > reportTreesSortedByDensity[j].Parent.Density
+	})
+}
+
+func (e *Explorer) processTree(
+	tree *ReportTree,
+	inChan chan<- *ReportTree,
+	reCalcTreeChan chan<- *ReportTree,
+) {
+	if tree == nil {
+		return
+	}
+
+	if tree.Density >= 1 {
+		// send to digger chan
+		e.treasureReportChan <- tree.Report
+
+		reCalcTreeChan <- tree
+		return
+	}
+
+	if tree.Density > 0 {
+		// set areas
+		if tree.Report.Area.SizeX >= tree.Report.Area.SizeY {
+			tree.Children = append(tree.Children, &ReportTree{
+				Report: openapi.Report{
+					Area: openapi.Area{
+						PosX:  tree.Report.Area.PosX,
+						PosY:  tree.Report.Area.PosY,
+						SizeX: tree.Report.Area.SizeX/2 + tree.Report.Area.SizeX%2,
+						SizeY: tree.Report.Area.SizeY,
+					},
+				},
+				Parent: tree,
+			})
+			tree.Children = append(tree.Children, &ReportTree{
+				Report: openapi.Report{
+					Area: openapi.Area{
+						PosX:  tree.Report.Area.PosX + tree.Children[0].Report.Area.SizeX,
+						PosY:  tree.Report.Area.PosY,
+						SizeX: tree.Report.Area.SizeX - tree.Children[0].Report.Area.SizeX,
+						SizeY: tree.Report.Area.SizeY,
+					},
+				},
+				Parent: tree,
+			})
+		} else {
+			tree.Children = append(tree.Children, &ReportTree{
+				Report: openapi.Report{
+					Area: openapi.Area{
+						PosX:  tree.Report.Area.PosX,
+						PosY:  tree.Report.Area.PosY + tree.Report.Area.SizeY/2,
+						SizeX: tree.Report.Area.SizeX,
+						SizeY: tree.Report.Area.SizeY/2 + tree.Report.Area.SizeY%2,
+					},
+				},
+				Parent: tree,
+			})
+
+			tree.Children = append(tree.Children, &ReportTree{
+				Report: openapi.Report{
+					Area: openapi.Area{
+						PosX:  tree.Report.Area.PosX,
+						PosY:  tree.Report.Area.PosY,
+						SizeX: tree.Report.Area.SizeX,
+						SizeY: tree.Report.Area.SizeY - tree.Children[0].Report.Area.SizeY,
+					},
+				},
+				Parent: tree,
+			})
+		}
+
+		tree.Children[0].Neighbour = tree.Children[1]
+		tree.Children[1].Neighbour = tree.Children[0]
+
+		inChan <- tree.Children[0]
 	}
 }

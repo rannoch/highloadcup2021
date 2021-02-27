@@ -14,6 +14,7 @@ type Client struct {
 	httpClient *fasthttp.Client
 	baseUrl    string
 	Debug      bool
+	Slowlog    time.Duration
 }
 
 func NewClient(httpClient *fasthttp.Client, baseUrl string) *Client {
@@ -21,6 +22,8 @@ func NewClient(httpClient *fasthttp.Client, baseUrl string) *Client {
 }
 
 func (client *Client) IssueLicense(coin []int32) (openapi.License, int, error) {
+	start := time.Now()
+
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req) // <- do not forget to release
 
@@ -38,16 +41,13 @@ func (client *Client) IssueLicense(coin []int32) (openapi.License, int, error) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
+	err = client.httpClient.Do(req, resp)
 	if client.Debug {
-		fmt.Println(req.String())
+		fmt.Println(req.String() + "\n" + resp.String())
 	}
 
-	if err := client.httpClient.Do(req, resp); err != nil {
-		return openapi.License{}, 0, err
-	}
-
-	if client.Debug {
-		fmt.Println(resp.String())
+	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
+		fmt.Printf("%s took %v\n\n", "IssueLicense", time.Since(start))
 	}
 
 	body := resp.Body()
@@ -149,17 +149,17 @@ func (client *Client) ExploreArea(area openapi.Area) (openapi.Report, int, error
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
+	err = client.httpClient.Do(req, resp)
 	if client.Debug {
-		fmt.Println(req.String())
+		fmt.Println(req.String() + "\n" + resp.String())
 	}
 
-	if err := client.httpClient.Do(req, resp); err != nil {
-		return openapi.Report{}, resp.StatusCode(), err
-	}
-
-	if client.Debug {
-		fmt.Println(resp.String())
+	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
 		fmt.Printf("%s took %v\n\n", "ExploreArea", time.Since(start))
+	}
+
+	if err != nil {
+		return openapi.Report{}, resp.StatusCode(), err
 	}
 
 	var report openapi.Report
@@ -172,6 +172,8 @@ func (client *Client) ExploreArea(area openapi.Area) (openapi.Report, int, error
 }
 
 func (client *Client) Dig(dig openapi.Dig) ([]string, int, error) {
+	start := time.Now()
+
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(client.baseUrl + "/dig")
 	req.Header.SetContentType("application/json")
@@ -189,28 +191,33 @@ func (client *Client) Dig(dig openapi.Dig) ([]string, int, error) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
+	err = client.httpClient.Do(req, resp)
 	if client.Debug {
-		fmt.Println(req.String())
+		fmt.Println(req.String() + "\n" + resp.String())
 	}
 
-	if err := client.httpClient.Do(req, resp); err != nil {
+	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
+		fmt.Printf("%s took %v\n\n", "Dig", time.Since(start))
+	}
+
+	if err != nil {
 		return nil, resp.StatusCode(), err
-	}
-
-	if client.Debug {
-		fmt.Println(resp.String())
 	}
 
 	var treasures []string
 
-	if err := json.Unmarshal(resp.Body(), &treasures); err != nil {
-		return nil, resp.StatusCode(), err
+	if resp.StatusCode() == 200 {
+		if err := json.Unmarshal(resp.Body(), &treasures); err != nil {
+			return nil, resp.StatusCode(), err
+		}
 	}
 
-	return treasures, resp.StatusCode(), nil
+	return treasures, resp.StatusCode(), err
 }
 
 func (client *Client) Cash(treasure string) ([]int32, int, error) {
+	start := time.Now()
+
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(client.baseUrl + "/cash")
 	req.Header.SetContentType("application/json")
@@ -223,16 +230,13 @@ func (client *Client) Cash(treasure string) ([]int32, int, error) {
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
+	_ = client.httpClient.Do(req, resp)
 	if client.Debug {
-		fmt.Println(req.String())
+		fmt.Println(req.String() + "\n" + resp.String())
 	}
 
-	if err := client.httpClient.Do(req, resp); err != nil {
-		return nil, resp.StatusCode(), err
-	}
-
-	if client.Debug {
-		fmt.Println(resp.String())
+	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
+		fmt.Printf("%s took %v\n\n", "Cash", time.Since(start))
 	}
 
 	var coins []int32
