@@ -1,8 +1,8 @@
 package main
 
 import (
+	rbt "github.com/emirpasic/gods/trees/redblacktree"
 	openapi "github.com/rannoch/highloadcup2021/client"
-	"sort"
 	"sync"
 )
 
@@ -92,17 +92,33 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 		inChan <-chan *ReportTree,
 		outChan chan<- *ReportTree,
 	) {
-		var reportTreesSortedByDensity []*ReportTree
-		reportTreesSortedByDensity = append(reportTreesSortedByDensity, rootReportTree.Children...)
+		var reportTreesSortedByDensity = RedBlackTreeExtended{rbt.NewWith(func(a, b interface{}) int {
+			reportTree1 := a.(*ReportTree)
+			reportTree2 := b.(*ReportTree)
+
+			switch true {
+			case reportTree1.Report == reportTree2.Report:
+				return 0
+			case reportTree1.Parent.Density == 0 || reportTree1.Parent.Density > reportTree2.Parent.Density:
+				return 1
+			case reportTree1.Parent.Density < reportTree2.Parent.Density:
+				return -1
+			}
+
+			return 1
+		})}
+
+		for _, child := range rootReportTree.Children {
+			reportTreesSortedByDensity.Put(child, child)
+		}
 
 		for {
 			select {
 			case reportTree := <-inChan:
-				reportTreesSortedByDensity = append(reportTreesSortedByDensity, reportTree)
-
-				sortTree(reportTreesSortedByDensity)
-			case outChan <- reportTreesSortedByDensity[0]:
-				reportTreesSortedByDensity = reportTreesSortedByDensity[1:]
+				reportTreesSortedByDensity.Put(reportTree, reportTree)
+			case outChan <- reportTreesSortedByDensity.GetMax().(*ReportTree):
+				reportTreesSortedByDensity.RemoveMax()
+				continue
 			}
 		}
 	}(inChan, outChan)
@@ -141,16 +157,6 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 			outChan,
 		)
 	}
-}
-
-func sortTree(reportTreesSortedByDensity []*ReportTree) {
-	sort.Slice(reportTreesSortedByDensity, func(i, j int) bool {
-		if reportTreesSortedByDensity[i].Parent.Density == 0 {
-			return true
-		}
-
-		return reportTreesSortedByDensity[i].Parent.Density > reportTreesSortedByDensity[j].Parent.Density
-	})
 }
 
 func (e *Explorer) processTree(

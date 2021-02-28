@@ -50,6 +50,10 @@ func (client *Client) IssueLicense(coin []int32) (openapi.License, int, error) {
 		fmt.Printf("%s took %v\n\n", "IssueLicense", time.Since(start))
 	}
 
+	if err != nil {
+		return openapi.License{}, resp.StatusCode(), err
+	}
+
 	body := resp.Body()
 
 	var license openapi.License
@@ -230,13 +234,17 @@ func (client *Client) Cash(treasure string) ([]int32, int, error) {
 	defer fasthttp.ReleaseRequest(req)   // <- do not forget to release
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
-	_ = client.httpClient.Do(req, resp)
+	err := client.httpClient.Do(req, resp)
 	if client.Debug {
 		fmt.Println(req.String() + "\n" + resp.String())
 	}
 
 	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
 		fmt.Printf("%s took %v\n\n", "Cash", time.Since(start))
+	}
+
+	if err != nil {
+		return nil, resp.StatusCode(), err
 	}
 
 	var coins []int32

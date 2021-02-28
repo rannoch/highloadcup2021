@@ -1,29 +1,38 @@
 package main
 
 import (
-	"fmt"
 	openapi "github.com/rannoch/highloadcup2021/client"
+	"sync"
 )
 
 type Digger struct {
 	client *Client
 
-	wallet  []int32
 	license openapi.License
 
 	treasureReportChan <-chan openapi.Report
 	cashierChan        chan<- string
 }
 
-func NewDigger(client *Client, treasureInfoChan <-chan openapi.Report, cashierChan chan<- string) *Digger {
-	return &Digger{client: client, treasureReportChan: treasureInfoChan, cashierChan: cashierChan}
+func NewDigger(
+	client *Client,
+	treasureReportChan <-chan openapi.Report,
+	cashierChan chan<- string,
+) *Digger {
+	return &Digger{
+		client:             client,
+		treasureReportChan: treasureReportChan,
+		cashierChan:        cashierChan,
+	}
 }
 
 func (digger *Digger) hasActiveLicense() bool {
 	return digger.license.DigAllowed > digger.license.DigUsed
 }
 
-func (digger *Digger) Start() {
+func (digger *Digger) Start(wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for report := range digger.treasureReportChan {
 		var left = report.Amount
 
@@ -34,14 +43,8 @@ func (digger *Digger) Start() {
 				for depth <= 10 && left > 0 {
 					// get license
 					if !digger.hasActiveLicense() {
-						var coin = []int32{}
-						if len(digger.wallet) > 0 {
-							coin = digger.wallet[:1]
-							digger.wallet = digger.wallet[1:]
-						}
-
 						for {
-							license, respCode, _ := digger.client.IssueLicense(coin)
+							license, respCode, _ := digger.client.IssueLicense(PopCoinFromWallet())
 							if respCode == 200 {
 								digger.license = license
 								break
@@ -86,13 +89,7 @@ func (digger *Digger) Start() {
 
 					if len(treasures) > 0 {
 						for _, treasure := range treasures {
-							for {
-								cash, _, err := digger.client.Cash(fmt.Sprintf("\"%s\"", treasure))
-								if err == nil {
-									digger.wallet = append(digger.wallet, cash...)
-									break
-								}
-							}
+							digger.cashierChan <- treasure
 						}
 
 						left = left - int32(len(treasures))

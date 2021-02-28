@@ -7,44 +7,63 @@ import (
 	"time"
 )
 
+var wallet []int32
+var m sync.RWMutex
+
+func AddToWallet(v []int32) {
+	m.Lock()
+	wallet = append(wallet, v...)
+	if len(wallet) > 100 {
+		wallet = wallet[:100]
+	}
+
+	m.Unlock()
+}
+
+func PopCoinFromWallet() []int32 {
+	m.RLock()
+	walletLen := len(wallet)
+	m.RUnlock()
+
+	if walletLen == 0 {
+		return []int32{}
+	}
+
+	m.Lock()
+	defer m.Unlock()
+	coin := []int32{wallet[0]}
+	wallet = wallet[1:]
+	return coin
+}
+
 type Miner struct {
 	balance openapi.Balance
 
 	explorer *Explorer
 	diggers  []*Digger
 
-	cashierChan chan string
+	cashiers []*Cashier
 
 	client *Client
 }
 
-func NewMiner(client *Client, diggersCount int) *Miner {
+func NewMiner(client *Client, diggersCount, cashiersCount int) *Miner {
 	m := &Miner{client: client}
 
-	var treasureCoordChan = make(chan openapi.Report, 100)
-	m.cashierChan = make(chan string, 1000)
+	var treasureCoordChan = make(chan openapi.Report, 10)
+	var cashierChan = make(chan string, 10)
 
 	for i := 0; i < diggersCount; i++ {
-		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, m.cashierChan))
+		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, cashierChan))
 	}
 
 	m.explorer = NewExplorer(client, treasureCoordChan)
 
-	return m
-}
-
-func (miner *Miner) cashier(c <-chan string) {
-	for {
-		select {
-		case treasure := <-c:
-			for {
-				_, _, err := miner.client.Cash(fmt.Sprintf("\"%s\"", treasure))
-				if err == nil {
-					break
-				}
-			}
-		}
+	for i := 0; i < cashiersCount; i++ {
+		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan))
 	}
+
+	return m
 }
 
 func (miner *Miner) healthCheck() {
@@ -75,7 +94,12 @@ func (miner *Miner) Start() error {
 
 	wg.Add(len(miner.diggers))
 	for _, digger := range miner.diggers {
-		go digger.Start()
+		go digger.Start(&wg)
+	}
+
+	wg.Add(len(miner.cashiers))
+	for _, cashier := range miner.cashiers {
+		go cashier.Start(&wg)
 	}
 
 	wg.Wait()
