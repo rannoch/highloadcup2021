@@ -8,29 +8,29 @@ import (
 )
 
 var wallet []int32
-var m sync.RWMutex
+var walletMutex sync.RWMutex
 
 func AddToWallet(v []int32) {
-	m.Lock()
+	walletMutex.Lock()
 	wallet = append(wallet, v...)
 	if len(wallet) > 100 {
 		wallet = wallet[:100]
 	}
 
-	m.Unlock()
+	walletMutex.Unlock()
 }
 
 func PopCoinFromWallet() []int32 {
-	m.RLock()
+	walletMutex.RLock()
 	walletLen := len(wallet)
-	m.RUnlock()
+	walletMutex.RUnlock()
 
 	if walletLen == 0 {
 		return []int32{}
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	walletMutex.Lock()
+	defer walletMutex.Unlock()
 	coin := []int32{wallet[0]}
 	wallet = wallet[1:]
 	return coin
@@ -40,7 +40,9 @@ type Miner struct {
 	balance openapi.Balance
 
 	explorer *Explorer
-	diggers  []*Digger
+	licensor *Licensor
+
+	diggers []*Digger
 
 	cashiers []*Cashier
 
@@ -52,9 +54,10 @@ func NewMiner(client *Client, diggersCount, cashiersCount int) *Miner {
 
 	var treasureCoordChan = make(chan openapi.Report, 10)
 	var cashierChan = make(chan string, 10)
+	var licensorChan = make(chan openapi.License)
 
 	for i := 0; i < diggersCount; i++ {
-		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, cashierChan))
+		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, cashierChan, licensorChan))
 	}
 
 	m.explorer = NewExplorer(client, treasureCoordChan)
@@ -62,6 +65,8 @@ func NewMiner(client *Client, diggersCount, cashiersCount int) *Miner {
 	for i := 0; i < cashiersCount; i++ {
 		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan))
 	}
+
+	m.licensor = NewLicensor(client, licensorChan)
 
 	return m
 }
@@ -84,7 +89,7 @@ func (miner *Miner) healthCheck() {
 func (miner *Miner) Start() error {
 	miner.healthCheck()
 
-	//go miner.cashier(miner.cashierChan)
+	go miner.licensor.Start()
 
 	wg := sync.WaitGroup{}
 

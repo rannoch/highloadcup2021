@@ -8,21 +8,24 @@ import (
 type Digger struct {
 	client *Client
 
-	license openapi.License
-
 	treasureReportChan <-chan openapi.Report
 	cashierChan        chan<- string
+	getLicenseChan     <-chan openapi.License
+
+	license openapi.License
 }
 
 func NewDigger(
 	client *Client,
 	treasureReportChan <-chan openapi.Report,
 	cashierChan chan<- string,
+	getLicenseChan <-chan openapi.License,
 ) *Digger {
 	return &Digger{
 		client:             client,
 		treasureReportChan: treasureReportChan,
 		cashierChan:        cashierChan,
+		getLicenseChan:     getLicenseChan,
 	}
 }
 
@@ -43,16 +46,7 @@ func (digger *Digger) Start(wg *sync.WaitGroup) {
 				for depth <= 10 && left > 0 {
 					// get license
 					if !digger.hasActiveLicense() {
-						for {
-							license, respCode, _ := digger.client.IssueLicense(PopCoinFromWallet())
-							if respCode == 200 {
-								digger.license = license
-								break
-							}
-							if respCode == 409 {
-								continue
-							}
-						}
+						digger.license = <-digger.getLicenseChan
 					}
 
 					// dig
