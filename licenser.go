@@ -10,11 +10,14 @@ type Licensor struct {
 
 	licenses       []model.License
 	licensesIssued int
+
+	workerCount int
 }
 
-func NewLicensor(client *Client, getLicenseChan chan<- model.License) *Licensor {
+func NewLicensor(client *Client, getLicenseChan chan<- model.License, workerCount int) *Licensor {
 	l := &Licensor{client: client, getLicenseChan: getLicenseChan}
 	l.licenseIssueChan = make(chan interface{}, 5)
+	l.workerCount = workerCount
 
 	return l
 }
@@ -34,7 +37,7 @@ func (licensor *Licensor) queueLicense() {
 func (licensor *Licensor) Start() {
 	var addLicenseChan = make(chan model.License)
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < licensor.workerCount; i++ {
 		go func(licenseIssueChan chan interface{}, addLicenseChan chan model.License) {
 			for {
 				select {

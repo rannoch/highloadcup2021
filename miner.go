@@ -49,7 +49,7 @@ type Miner struct {
 	client *Client
 }
 
-func NewMiner(client *Client, diggersCount, cashiersCount int) *Miner {
+func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licensorsCount int) *Miner {
 	m := &Miner{client: client}
 
 	var treasureCoordChan = make(chan model.Report, 10)
@@ -60,13 +60,13 @@ func NewMiner(client *Client, diggersCount, cashiersCount int) *Miner {
 		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, cashierChan, licensorChan))
 	}
 
-	m.explorer = NewExplorer(client, treasureCoordChan)
+	m.explorer = NewExplorer(client, treasureCoordChan, explorersCount)
 
 	for i := 0; i < cashiersCount; i++ {
 		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan))
 	}
 
-	m.licensor = NewLicensor(client, licensorChan)
+	m.licensor = NewLicensor(client, licensorChan, licensorsCount)
 
 	return m
 }

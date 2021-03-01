@@ -10,10 +10,12 @@ type Explorer struct {
 	client *Client
 
 	treasureReportChan chan<- model.Report
+
+	workerCount int
 }
 
-func NewExplorer(client *Client, treasureCoordChan chan<- model.Report) *Explorer {
-	return &Explorer{client: client, treasureReportChan: treasureCoordChan}
+func NewExplorer(client *Client, treasureReportChan chan<- model.Report, workerCount int) *Explorer {
+	return &Explorer{client: client, treasureReportChan: treasureReportChan, workerCount: workerCount}
 }
 
 func (r *ReportTree) setReport(report model.Report) {
@@ -65,14 +67,14 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 		Parent: nil,
 	}
 
-	const xStep = 1750
-	const yStep = 7
+	const xStep = 350
+	const yStep = 350
 
 	// calculate initial
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 25; i++ {
 		area := model.Area{
-			PosX:  int32(i%2) * xStep,
-			PosY:  int32(i/2) * yStep,
+			PosX:  int32(i%5) * xStep,
+			PosY:  int32(i/5) * yStep,
 			SizeX: xStep,
 			SizeY: yStep,
 		}
@@ -123,11 +125,9 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 		}
 	}(inChan, outChan)
 
-	workersCount := 5
+	wg.Add(e.workerCount)
 
-	wg.Add(workersCount)
-
-	for i := 0; i < workersCount; i++ {
+	for i := 0; i < e.workerCount; i++ {
 		go func(
 			inChan chan<- *ReportTree,
 			outChan <-chan *ReportTree,
