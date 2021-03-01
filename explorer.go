@@ -51,6 +51,26 @@ type ReportTree struct {
 	Neighbour *ReportTree
 }
 
+var reportTreeComparator = rbt.NewWith(func(a, b interface{}) int {
+	if b == nil {
+		return 1
+	}
+
+	reportTree1 := a.(*ReportTree)
+	reportTree2 := b.(*ReportTree)
+
+	switch true {
+	case reportTree1.Report == reportTree2.Report:
+		return 0
+	case reportTree1.Parent.Density == 0 || reportTree1.Parent.Density > reportTree2.Parent.Density:
+		return 1
+	case reportTree1.Parent.Density < reportTree2.Parent.Density:
+		return -1
+	}
+
+	return 1
+})
+
 func (e *Explorer) Start(wg *sync.WaitGroup) {
 	rootReportTree := &ReportTree{
 		Report: model.Report{
@@ -94,21 +114,8 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 		inChan <-chan *ReportTree,
 		outChan chan<- *ReportTree,
 	) {
-		var reportTreesSortedByDensity = RedBlackTreeExtended{rbt.NewWith(func(a, b interface{}) int {
-			reportTree1 := a.(*ReportTree)
-			reportTree2 := b.(*ReportTree)
 
-			switch true {
-			case reportTree1.Report == reportTree2.Report:
-				return 0
-			case reportTree1.Parent.Density == 0 || reportTree1.Parent.Density > reportTree2.Parent.Density:
-				return 1
-			case reportTree1.Parent.Density < reportTree2.Parent.Density:
-				return -1
-			}
-
-			return 1
-		})}
+		var reportTreesSortedByDensity = NewRedBlackTreeExtended(reportTreeComparator)
 
 		for _, child := range rootReportTree.Children {
 			reportTreesSortedByDensity.Put(child, child)
@@ -118,7 +125,7 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 			select {
 			case reportTree := <-inChan:
 				reportTreesSortedByDensity.Put(reportTree, reportTree)
-			case outChan <- reportTreesSortedByDensity.GetMax().(*ReportTree):
+			case outChan <- reportTreesSortedByDensity.GetMaxNodeValue():
 				reportTreesSortedByDensity.RemoveMax()
 				continue
 			}
