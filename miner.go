@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	openapi "github.com/rannoch/highloadcup2021/client"
+	"github.com/rannoch/highloadcup2021/model"
 	"sync"
 	"time"
 )
@@ -37,7 +37,7 @@ func PopCoinFromWallet() []int32 {
 }
 
 type Miner struct {
-	balance openapi.Balance
+	balance model.Balance
 
 	explorer *Explorer
 	licensor *Licensor
@@ -52,9 +52,9 @@ type Miner struct {
 func NewMiner(client *Client, diggersCount, cashiersCount int) *Miner {
 	m := &Miner{client: client}
 
-	var treasureCoordChan = make(chan openapi.Report, 10)
+	var treasureCoordChan = make(chan model.Report, 10)
 	var cashierChan = make(chan string, 10)
-	var licensorChan = make(chan openapi.License)
+	var licensorChan = make(chan model.License)
 
 	for i := 0; i < diggersCount; i++ {
 		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, cashierChan, licensorChan))

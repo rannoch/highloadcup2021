@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
-	openapi "github.com/rannoch/highloadcup2021/client"
+	"github.com/rannoch/highloadcup2021/model"
 	"github.com/valyala/fasthttp"
 	"time"
 )
@@ -21,7 +21,7 @@ func NewClient(httpClient *fasthttp.Client, baseUrl string) *Client {
 	return &Client{httpClient: httpClient, baseUrl: baseUrl}
 }
 
-func (client *Client) IssueLicense(coin []int32) (openapi.License, int, error) {
+func (client *Client) IssueLicense(coin []int32) (model.License, int, error) {
 	start := time.Now()
 
 	req := fasthttp.AcquireRequest()
@@ -33,7 +33,7 @@ func (client *Client) IssueLicense(coin []int32) (openapi.License, int, error) {
 
 	requestBody, err := json.Marshal(coin)
 	if err != nil {
-		return openapi.License{}, 0, err
+		return model.License{}, 0, err
 	}
 
 	req.SetBody(requestBody)
@@ -51,21 +51,21 @@ func (client *Client) IssueLicense(coin []int32) (openapi.License, int, error) {
 	}
 
 	if err != nil {
-		return openapi.License{}, resp.StatusCode(), err
+		return model.License{}, resp.StatusCode(), err
 	}
 
 	body := resp.Body()
 
-	var license openapi.License
+	var license model.License
 
 	if err := json.Unmarshal(body, &license); err != nil {
-		return openapi.License{}, resp.StatusCode(), err
+		return model.License{}, resp.StatusCode(), err
 	}
 
 	return license, resp.StatusCode(), nil
 }
 
-func (client *Client) ListLicenses() ([]openapi.License, int, error) {
+func (client *Client) ListLicenses() ([]model.License, int, error) {
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(client.baseUrl + "/licenses")
 	req.Header.SetContentType("application/json")
@@ -82,7 +82,7 @@ func (client *Client) ListLicenses() ([]openapi.License, int, error) {
 
 	body := resp.Body()
 
-	var licenses []openapi.License
+	var licenses []model.License
 
 	if err := json.Unmarshal(body, &licenses); err != nil {
 		return nil, resp.StatusCode(), err
@@ -109,7 +109,7 @@ func (client *Client) HealthCheck() (int, error) {
 	return resp.StatusCode(), nil
 }
 
-func (client *Client) GetBalance() (openapi.Balance, int, error) {
+func (client *Client) GetBalance() (model.Balance, int, error) {
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(client.baseUrl + "/balance")
 	req.Header.SetContentType("application/json")
@@ -121,19 +121,19 @@ func (client *Client) GetBalance() (openapi.Balance, int, error) {
 	defer fasthttp.ReleaseResponse(resp) // <- do not forget to release
 
 	if err := client.httpClient.Do(req, resp); err != nil {
-		return openapi.Balance{}, resp.StatusCode(), err
+		return model.Balance{}, resp.StatusCode(), err
 	}
 
-	var balance openapi.Balance
+	var balance model.Balance
 
 	if err := json.Unmarshal(resp.Body(), &balance); err != nil {
-		return openapi.Balance{}, resp.StatusCode(), err
+		return model.Balance{}, resp.StatusCode(), err
 	}
 
 	return balance, resp.StatusCode(), nil
 }
 
-func (client *Client) ExploreArea(area openapi.Area) (openapi.Report, int, error) {
+func (client *Client) ExploreArea(area model.Area) (model.Report, int, error) {
 	start := time.Now()
 
 	req := fasthttp.AcquireRequest()
@@ -143,9 +143,9 @@ func (client *Client) ExploreArea(area openapi.Area) (openapi.Report, int, error
 	req.Header.SetContentType("application/json")
 	req.Header.SetMethod("POST")
 
-	requestBody, err := json.Marshal(area)
+	requestBody, err := area.MarshalJSON()
 	if err != nil {
-		return openapi.Report{}, 0, err
+		return model.Report{}, 0, err
 	}
 
 	req.SetBody(requestBody)
@@ -163,19 +163,19 @@ func (client *Client) ExploreArea(area openapi.Area) (openapi.Report, int, error
 	}
 
 	if err != nil {
-		return openapi.Report{}, resp.StatusCode(), err
+		return model.Report{}, resp.StatusCode(), err
 	}
 
-	var report openapi.Report
+	var report model.Report
 
 	if err := json.Unmarshal(resp.Body(), &report); err != nil {
-		return openapi.Report{}, resp.StatusCode(), err
+		return model.Report{}, resp.StatusCode(), err
 	}
 
 	return report, resp.StatusCode(), nil
 }
 
-func (client *Client) Dig(dig openapi.Dig) ([]string, int, error) {
+func (client *Client) Dig(dig model.Dig) ([]string, int, error) {
 	start := time.Now()
 
 	req := fasthttp.AcquireRequest()
@@ -185,7 +185,7 @@ func (client *Client) Dig(dig openapi.Dig) ([]string, int, error) {
 
 	defer fasthttp.ReleaseRequest(req) // <- do not forget to release
 
-	requestBody, err := json.Marshal(dig)
+	requestBody, err := dig.MarshalJSON()
 	if err != nil {
 		return nil, 0, err
 	}

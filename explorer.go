@@ -2,21 +2,21 @@ package main
 
 import (
 	rbt "github.com/emirpasic/gods/trees/redblacktree"
-	openapi "github.com/rannoch/highloadcup2021/client"
+	"github.com/rannoch/highloadcup2021/model"
 	"sync"
 )
 
 type Explorer struct {
 	client *Client
 
-	treasureReportChan chan<- openapi.Report
+	treasureReportChan chan<- model.Report
 }
 
-func NewExplorer(client *Client, treasureCoordChan chan<- openapi.Report) *Explorer {
+func NewExplorer(client *Client, treasureCoordChan chan<- model.Report) *Explorer {
 	return &Explorer{client: client, treasureReportChan: treasureCoordChan}
 }
 
-func (r *ReportTree) setReport(report openapi.Report) {
+func (r *ReportTree) setReport(report model.Report) {
 	r.Report = report
 
 	r.calculateDensity()
@@ -38,7 +38,7 @@ func (r *ReportTree) calculateDensity() {
 }
 
 type ReportTree struct {
-	Report openapi.Report
+	Report model.Report
 
 	Density float32
 
@@ -51,8 +51,8 @@ type ReportTree struct {
 
 func (e *Explorer) Start(wg *sync.WaitGroup) {
 	rootReportTree := &ReportTree{
-		Report: openapi.Report{
-			Area: openapi.Area{
+		Report: model.Report{
+			Area: model.Area{
 				PosX:  0,
 				PosY:  0,
 				SizeX: 3500,
@@ -70,7 +70,7 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 
 	// calculate initial
 	for i := 0; i < 100; i++ {
-		area := openapi.Area{
+		area := model.Area{
 			PosX:  int32(i%2) * xStep,
 			PosY:  int32(i/2) * yStep,
 			SizeX: xStep,
@@ -78,7 +78,7 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 		}
 
 		rootReportTree.Children = append(rootReportTree.Children, &ReportTree{
-			Report: openapi.Report{
+			Report: model.Report{
 				Area: area,
 			},
 			Parent: rootReportTree,
@@ -178,8 +178,8 @@ func (e *Explorer) processTree(
 		// set areas
 		if tree.Report.Area.SizeX >= tree.Report.Area.SizeY {
 			tree.Children = append(tree.Children, &ReportTree{
-				Report: openapi.Report{
-					Area: openapi.Area{
+				Report: model.Report{
+					Area: model.Area{
 						PosX:  tree.Report.Area.PosX,
 						PosY:  tree.Report.Area.PosY,
 						SizeX: tree.Report.Area.SizeX/2 + tree.Report.Area.SizeX%2,
@@ -189,8 +189,8 @@ func (e *Explorer) processTree(
 				Parent: tree,
 			})
 			tree.Children = append(tree.Children, &ReportTree{
-				Report: openapi.Report{
-					Area: openapi.Area{
+				Report: model.Report{
+					Area: model.Area{
 						PosX:  tree.Report.Area.PosX + tree.Children[0].Report.Area.SizeX,
 						PosY:  tree.Report.Area.PosY,
 						SizeX: tree.Report.Area.SizeX - tree.Children[0].Report.Area.SizeX,
@@ -201,8 +201,8 @@ func (e *Explorer) processTree(
 			})
 		} else {
 			tree.Children = append(tree.Children, &ReportTree{
-				Report: openapi.Report{
-					Area: openapi.Area{
+				Report: model.Report{
+					Area: model.Area{
 						PosX:  tree.Report.Area.PosX,
 						PosY:  tree.Report.Area.PosY + tree.Report.Area.SizeY/2,
 						SizeX: tree.Report.Area.SizeX,
@@ -213,8 +213,8 @@ func (e *Explorer) processTree(
 			})
 
 			tree.Children = append(tree.Children, &ReportTree{
-				Report: openapi.Report{
-					Area: openapi.Area{
+				Report: model.Report{
+					Area: model.Area{
 						PosX:  tree.Report.Area.PosX,
 						PosY:  tree.Report.Area.PosY,
 						SizeX: tree.Report.Area.SizeX,

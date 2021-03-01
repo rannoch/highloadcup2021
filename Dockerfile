@@ -2,5 +2,5 @@ FROM golang:latest
 RUN mkdir /app
 ADD . /app/
 WORKDIR /app
-RUN go build -o hlcup2021 .
+RUN make build
 CMD ["/app/hlcup2021"]

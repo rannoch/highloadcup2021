@@ -1,29 +1,29 @@
 package main
 
-import openapi "github.com/rannoch/highloadcup2021/client"
+import "github.com/rannoch/highloadcup2021/model"
 
 type Licensor struct {
 	client *Client
 
-	getLicenseChan   chan<- openapi.License
+	getLicenseChan   chan<- model.License
 	licenseIssueChan chan interface{}
 
-	licenses       []openapi.License
+	licenses       []model.License
 	licensesIssued int
 }
 
-func NewLicensor(client *Client, getLicenseChan chan<- openapi.License) *Licensor {
+func NewLicensor(client *Client, getLicenseChan chan<- model.License) *Licensor {
 	l := &Licensor{client: client, getLicenseChan: getLicenseChan}
 	l.licenseIssueChan = make(chan interface{}, 5)
 
 	return l
 }
 
-func (licensor *Licensor) GetLicense() openapi.License {
+func (licensor *Licensor) GetLicense() model.License {
 	if len(licensor.licenses) > 0 {
 		return licensor.licenses[0]
 	}
-	return openapi.License{}
+	return model.License{}
 }
 
 func (licensor *Licensor) queueLicense() {
@@ -32,10 +32,10 @@ func (licensor *Licensor) queueLicense() {
 }
 
 func (licensor *Licensor) Start() {
-	var addLicenseChan = make(chan openapi.License)
+	var addLicenseChan = make(chan model.License)
 
 	for i := 0; i < 5; i++ {
-		go func(licenseIssueChan chan interface{}, addLicenseChan chan openapi.License) {
+		go func(licenseIssueChan chan interface{}, addLicenseChan chan model.License) {
 			for {
 				select {
 				case <-licenseIssueChan:

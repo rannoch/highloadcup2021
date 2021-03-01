@@ -1,25 +1,25 @@
 package main
 
 import (
-	openapi "github.com/rannoch/highloadcup2021/client"
+	"github.com/rannoch/highloadcup2021/model"
 	"sync"
 )
 
 type Digger struct {
 	client *Client
 
-	treasureReportChan <-chan openapi.Report
+	treasureReportChan <-chan model.Report
 	cashierChan        chan<- string
-	getLicenseChan     <-chan openapi.License
+	getLicenseChan     <-chan model.License
 
-	license openapi.License
+	license model.License
 }
 
 func NewDigger(
 	client *Client,
-	treasureReportChan <-chan openapi.Report,
+	treasureReportChan <-chan model.Report,
 	cashierChan chan<- string,
-	getLicenseChan <-chan openapi.License,
+	getLicenseChan <-chan model.License,
 ) *Digger {
 	return &Digger{
 		client:             client,
@@ -50,7 +50,7 @@ func (digger *Digger) Start(wg *sync.WaitGroup) {
 					}
 
 					// dig
-					treasures, digRespCode, _ := digger.client.Dig(openapi.Dig{
+					treasures, digRespCode, _ := digger.client.Dig(model.Dig{
 						LicenseID: digger.license.Id,
 						PosX:      x,
 						PosY:      y,
