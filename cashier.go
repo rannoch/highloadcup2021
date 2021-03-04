@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -21,13 +20,17 @@ func (cashier *Cashier) Start(wg *sync.WaitGroup) {
 	for {
 		select {
 		case treasure := <-cashier.treasureChan:
-			for {
-				cash, _, err := cashier.client.Cash(fmt.Sprintf("\"%s\"", treasure))
-				if err == nil {
-					AddToWallet(cash)
-					break
-				}
-			}
+			cashier.cash(treasure)
+		}
+	}
+}
+
+func (cashier *Cashier) cash(treasure string) {
+	for {
+		cash, _, err := cashier.client.Cash(`"` + treasure + `"`)
+		if err == nil {
+			AddToWallet(cash)
+			return
 		}
 	}
 }

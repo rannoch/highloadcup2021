@@ -11,7 +11,8 @@ import (
 type Explorer struct {
 	client *Client
 
-	treasureReportChan chan<- model.Report
+	treasureReportChan      chan<- model.Report
+	treasureCoordChanUrgent chan<- model.Report
 
 	workerCount int
 
@@ -23,8 +24,9 @@ type Explorer struct {
 	requestTimeMutex sync.RWMutex
 }
 
-func NewExplorer(client *Client, treasureReportChan chan<- model.Report, workerCount int) *Explorer {
+func NewExplorer(client *Client, treasureReportChan, treasureCoordChanUrgent chan<- model.Report, workerCount int) *Explorer {
 	e := &Explorer{client: client, treasureReportChan: treasureReportChan, workerCount: workerCount}
+	e.treasureCoordChanUrgent = treasureCoordChanUrgent
 	e.requestTimeByArea = make(map[int32]time.Duration)
 	e.requestCountByArea = make(map[int32]int64)
 
@@ -231,9 +233,15 @@ func (e *Explorer) processTree(
 
 	if tree.Density >= 1 && tree.AreaSize == 1 {
 		// send to digger chan
+
+		treasureChan := e.treasureReportChan
+		if tree.Density > 1 {
+			treasureChan = e.treasureCoordChanUrgent
+		}
+
 		sendingToDiggerStartTime := time.Now()
 		select {
-		case e.treasureReportChan <- tree.Report:
+		case treasureChan <- tree.Report:
 			e.requestTimeMutex.Lock()
 			e.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
 			e.requestTimeMutex.Unlock()

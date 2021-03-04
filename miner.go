@@ -53,14 +53,16 @@ func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licen
 	m := &Miner{client: client}
 
 	var treasureCoordChan = make(chan model.Report, 10)
+	var treasureCoordChanUrgent = make(chan model.Report, 10)
+
 	var cashierChan = make(chan string, 10)
 	var licensorChan = make(chan model.License)
 
 	for i := 0; i < diggersCount; i++ {
-		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, cashierChan, licensorChan))
+		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, treasureCoordChanUrgent, cashierChan, licensorChan))
 	}
 
-	m.explorer = NewExplorer(client, treasureCoordChan, explorersCount)
+	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount)
 
 	for i := 0; i < cashiersCount; i++ {
 		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan))
@@ -120,8 +122,11 @@ func (miner *Miner) printStat() {
 	for {
 		select {
 		case t := <-time.After(10 * time.Second):
-			miner.explorer.PrintStat(t.Sub(startTime))
-			miner.licensor.PrintStat(t.Sub(startTime))
+			sub := t.Sub(startTime)
+
+			miner.explorer.PrintStat(sub)
+			miner.licensor.PrintStat(sub)
+			DiggerStat.printDiggerStat(sub)
 		}
 	}
 }

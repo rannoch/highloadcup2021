@@ -35,7 +35,7 @@ func main() {
 	//apiClient.Debug = true
 	//apiClient.Slowlog = time.Second
 
-	miner := NewMiner(apiClient, 5, 2, 5, 5)
+	miner := NewMiner(apiClient, 5, 4, 8, 5)
 
 	err = miner.Start()
 	fmt.Println(err)
