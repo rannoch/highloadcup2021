@@ -27,7 +27,8 @@ func main() {
 	}()
 
 	client := &fasthttp.Client{
-		MaxConnsPerHost: 100,
+		//MaxConnsPerHost: 50,
+		//MaxIdemponentCallAttempts: 0,
 		//ReadTimeout:     20 * time.Second,
 		//WriteTimeout:    20 * time.Second,
 	}
@@ -35,7 +36,9 @@ func main() {
 	//apiClient.Debug = true
 	//apiClient.Slowlog = time.Second
 
-	miner := NewMiner(apiClient, 5, 4, 8, 5)
+	showStat := true
+
+	miner := NewMiner(apiClient, 5, 5, 10, 5, showStat)
 
 	err = miner.Start()
 	fmt.Println(err)

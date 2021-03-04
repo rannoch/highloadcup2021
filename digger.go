@@ -33,6 +33,8 @@ type Digger struct {
 	getLicenseChan <-chan model.License
 
 	license model.License
+
+	showStat bool
 }
 
 func NewDigger(
@@ -41,6 +43,7 @@ func NewDigger(
 	treasureReportChanUrgent <-chan model.Report,
 	cashierChan chan<- string,
 	getLicenseChan <-chan model.License,
+	showStat bool,
 ) *Digger {
 	return &Digger{
 		client:                   client,
@@ -48,6 +51,7 @@ func NewDigger(
 		treasureReportChanUrgent: treasureReportChanUrgent,
 		cashierChan:              cashierChan,
 		getLicenseChan:           getLicenseChan,
+		showStat:                 showStat,
 	}
 }
 
@@ -76,68 +80,71 @@ func (digger *Digger) Start(wg *sync.WaitGroup) {
 }
 
 func (digger *Digger) dig(report model.Report) {
+	var sendingToCashierStartTime time.Time
 	var left = report.Amount
 
-	for x := report.Area.PosX; x < report.Area.PosX+report.Area.SizeX; x++ {
-		for y := report.Area.PosY; y < report.Area.PosY+report.Area.SizeY; y++ {
-			var depth int32 = 1
+	var depth int32 = 1
 
-			for depth <= 10 && left > 0 {
-				// get license
-				if !digger.hasActiveLicense() {
-					digger.license = <-digger.getLicenseChan
+	for depth <= 10 && left > 0 {
+		// get license
+		if !digger.hasActiveLicense() {
+			digger.license = <-digger.getLicenseChan
+		}
+
+		// dig
+		treasures, digRespCode, _ := digger.client.Dig(model.Dig{
+			LicenseID: digger.license.Id,
+			PosX:      report.Area.PosX,
+			PosY:      report.Area.PosY,
+			Depth:     depth,
+		})
+
+		if digRespCode == 200 && len(treasures) == 0 {
+			continue
+		}
+
+		if digRespCode == 403 {
+			digger.license.DigAllowed = 0
+			continue
+		}
+
+		if digRespCode >= 500 {
+			continue
+		}
+
+		depth++
+		digger.license.DigUsed++
+
+		if digRespCode == 404 {
+			continue
+		}
+
+		if digRespCode == 422 {
+			continue
+		}
+
+		if len(treasures) > 0 {
+			if digger.showStat {
+				DiggerStat.mutex.Lock()
+				DiggerStat.TreasuresTotal++
+				DiggerStat.mutex.Unlock()
+			}
+
+			for i := range treasures {
+				if digger.showStat {
+					sendingToCashierStartTime = time.Now()
 				}
-
-				// dig
-				treasures, digRespCode, _ := digger.client.Dig(model.Dig{
-					LicenseID: digger.license.Id,
-					PosX:      x,
-					PosY:      y,
-					Depth:     depth,
-				})
-
-				if digRespCode == 200 && len(treasures) == 0 {
-					continue
-				}
-
-				if digRespCode == 403 {
-					digger.license.DigAllowed = 0
-					continue
-				}
-
-				if digRespCode >= 500 {
-					continue
-				}
-
-				depth++
-				digger.license.DigUsed++
-
-				if digRespCode == 404 {
-					continue
-				}
-
-				if digRespCode == 422 {
-					continue
-				}
-
-				if len(treasures) > 0 {
-					DiggerStat.mutex.Lock()
-					DiggerStat.TreasuresTotal++
-					DiggerStat.mutex.Unlock()
-
-					for i := range treasures {
-						sendingToCashierStartTime := time.Now()
-						select {
-						case digger.cashierChan <- treasures[i]:
-							DiggerStat.mutex.Lock()
-							DiggerStat.CashierChanWaitTimeTotal += time.Now().Sub(sendingToCashierStartTime)
-							DiggerStat.mutex.Unlock()
-						}
+				select {
+				case digger.cashierChan <- treasures[i]:
+					if digger.showStat {
+						DiggerStat.mutex.Lock()
+						DiggerStat.CashierChanWaitTimeTotal += time.Now().Sub(sendingToCashierStartTime)
+						DiggerStat.mutex.Unlock()
 					}
-
-					left = left - int32(len(treasures))
 				}
 			}
+
+			left = left - int32(len(treasures))
 		}
 	}
 }

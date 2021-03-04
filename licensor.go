@@ -18,7 +18,8 @@ type Licensor struct {
 
 	workerCount int
 
-	stat LicensorStat
+	stat     LicensorStat
+	showStat bool
 }
 
 type LicensorStat struct {
@@ -31,10 +32,11 @@ func (l *LicensorStat) String() string {
 	return fmt.Sprintf("Free licenses issued: %d\nPaid licenses issued: %d\n", l.FreeLicensesIssued, l.PaidLicensesIssued)
 }
 
-func NewLicensor(client *Client, getLicenseChan chan<- model.License, workerCount int) *Licensor {
+func NewLicensor(client *Client, getLicenseChan chan<- model.License, workerCount int, showStat bool) *Licensor {
 	l := &Licensor{client: client, getLicenseChan: getLicenseChan}
 	l.licenseIssueChan = make(chan interface{}, 5)
 	l.workerCount = workerCount
+	l.showStat = showStat
 
 	return l
 }

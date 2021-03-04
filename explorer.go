@@ -14,8 +14,19 @@ type Explorer struct {
 	treasureReportChan      chan<- model.Report
 	treasureCoordChanUrgent chan<- model.Report
 
+	reportTreesSortedByDensity *RedBlackTreeExtended
+
+	inChan  chan *ReportTree
+	outChan chan *ReportTree
+
 	workerCount int
 
+	explorerStat explorerStat
+
+	showStat bool
+}
+
+type explorerStat struct {
 	requestsTotal       int64
 	requestTimeByArea   map[int32]time.Duration
 	requestCountByArea  map[int32]int64
@@ -24,11 +35,22 @@ type Explorer struct {
 	requestTimeMutex sync.RWMutex
 }
 
-func NewExplorer(client *Client, treasureReportChan, treasureCoordChanUrgent chan<- model.Report, workerCount int) *Explorer {
+func NewExplorer(
+	client *Client,
+	treasureReportChan, treasureCoordChanUrgent chan<- model.Report,
+	workerCount int,
+	showStat bool,
+) *Explorer {
 	e := &Explorer{client: client, treasureReportChan: treasureReportChan, workerCount: workerCount}
 	e.treasureCoordChanUrgent = treasureCoordChanUrgent
-	e.requestTimeByArea = make(map[int32]time.Duration)
-	e.requestCountByArea = make(map[int32]int64)
+
+	e.explorerStat.requestTimeByArea = make(map[int32]time.Duration)
+	e.explorerStat.requestCountByArea = make(map[int32]int64)
+
+	e.inChan = make(chan *ReportTree, 1000)
+	e.outChan = make(chan *ReportTree, 0)
+
+	e.showStat = showStat
 
 	return e
 }
@@ -89,7 +111,7 @@ var reportTreeComparator = rbt.NewWith(func(a, b interface{}) int {
 	return 1
 })
 
-func (e *Explorer) Start(wg *sync.WaitGroup) {
+func (e *Explorer) Init() {
 	rootReportTree := &ReportTree{
 		Report: model.Report{
 			Area: model.Area{
@@ -125,87 +147,86 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 		})
 	}
 
-	var reportTreesSortedByDensity = NewRedBlackTreeExtended(reportTreeComparator)
+	e.reportTreesSortedByDensity = NewRedBlackTreeExtended(reportTreeComparator)
 
 	for _, child := range rootReportTree.Children {
-		reportTreesSortedByDensity.Put(child, child)
+		e.reportTreesSortedByDensity.Put(child, child)
 	}
+}
 
-	var inChan = make(chan *ReportTree, 1000)
-	var outChan = make(chan *ReportTree, 0)
-
-	go e.reportTreeSorter(reportTreesSortedByDensity, inChan, outChan)
+func (e *Explorer) Start(wg *sync.WaitGroup) {
+	go e.reportTreeSorter()
 
 	wg.Add(e.workerCount)
 
 	for i := 0; i < e.workerCount; i++ {
-		go e.explore(inChan, outChan, wg)
+		go e.explore(wg)
 	}
 }
 
-func (e *Explorer) reportTreeSorter(
-	reportTreesSortedByDensity *RedBlackTreeExtended,
-	inChan <-chan *ReportTree,
-	outChan chan<- *ReportTree,
-) {
+func (e *Explorer) reportTreeSorter() {
 	for {
 		select {
-		case reportTree := <-inChan:
-			reportTreesSortedByDensity.Put(reportTree, reportTree)
-		case outChan <- reportTreesSortedByDensity.GetMaxNodeValue():
-			reportTreesSortedByDensity.RemoveMax()
+		case reportTree := <-e.inChan:
+			e.reportTreesSortedByDensity.Put(reportTree, reportTree)
+		case e.outChan <- e.reportTreesSortedByDensity.GetMaxNodeValue():
+			e.reportTreesSortedByDensity.RemoveMax()
 		}
 	}
 }
 
 func (e *Explorer) PrintStat(duration time.Duration) {
-	e.requestTimeMutex.RLock()
-	requestTimeString, _ := json.Marshal(e.requestTimeByArea)
+	e.explorerStat.requestTimeMutex.RLock()
+	requestTimeString, _ := json.Marshal(e.explorerStat.requestTimeByArea)
 
 	println("Explores total after " + duration.String())
-	println(e.requestsTotal)
+	println(e.explorerStat.requestsTotal)
 
 	println("Explore requests time by area stat after " + duration.String())
 	println(string(requestTimeString))
 
-	requestCountString, _ := json.Marshal(e.requestCountByArea)
+	requestCountString, _ := json.Marshal(e.explorerStat.requestCountByArea)
 	println("Explore requests count by area stat after " + duration.String())
 	println(string(requestCountString))
 
-	var requestAvgTime = make(map[int32]float64, len(e.requestTimeByArea))
+	var requestAvgTime = make(map[int32]float64, len(e.explorerStat.requestTimeByArea))
 
-	for area := range e.requestTimeByArea {
-		requestAvgTime[area] = math.Round(float64(e.requestTimeByArea[area])/float64(e.requestCountByArea[area])/float64(time.Second)*1000) / 1000
+	for area := range e.explorerStat.requestTimeByArea {
+		requestAvgTime[area] = math.Round(float64(e.explorerStat.requestTimeByArea[area])/float64(e.explorerStat.requestCountByArea[area])/float64(time.Second)*1000) / 1000
 	}
 
 	requestAvgTimeString, _ := json.Marshal(requestAvgTime)
 	println("Explore requests avg time by area stat after " + duration.String())
 	println(string(requestAvgTimeString))
 
-	println("Explore digger wait time total " + e.diggerWaitTimeTotal.String())
+	println("Explore digger wait time total " + e.explorerStat.diggerWaitTimeTotal.String())
 	println()
 
-	e.requestTimeMutex.RUnlock()
+	e.explorerStat.requestTimeMutex.RUnlock()
 }
 
 func (e *Explorer) explore(
-	inChan chan<- *ReportTree,
-	outChan <-chan *ReportTree,
 	wg *sync.WaitGroup,
 ) {
 	wg.Done()
 
-	for densestTree := range outChan {
+	for densestTree := range e.outChan {
+		if densestTree == nil {
+			continue
+		}
+
 		// explore left and calculate neighbor amount
 		for {
 			report, respCode, requestTime, _ := e.client.ExploreArea(densestTree.Report.Area)
 
 			// stat
-			e.requestTimeMutex.Lock()
-			e.requestsTotal++
-			e.requestTimeByArea[densestTree.Report.Area.SizeX*densestTree.Report.Area.SizeY] += requestTime
-			e.requestCountByArea[densestTree.Report.Area.SizeX*densestTree.Report.Area.SizeY]++
-			e.requestTimeMutex.Unlock()
+			if e.showStat {
+				e.explorerStat.requestTimeMutex.Lock()
+				e.explorerStat.requestsTotal++
+				e.explorerStat.requestTimeByArea[densestTree.Report.Area.SizeX*densestTree.Report.Area.SizeY] += requestTime
+				e.explorerStat.requestCountByArea[densestTree.Report.Area.SizeX*densestTree.Report.Area.SizeY]++
+				e.explorerStat.requestTimeMutex.Unlock()
+			}
 
 			if respCode == 200 {
 				densestTree.setReport(report)
@@ -218,18 +239,19 @@ func (e *Explorer) explore(
 			densestTree.Neighbour.setAmount(densestTree.Parent.Report.Amount - densestTree.Report.Amount)
 		}
 
-		e.processTree(densestTree, inChan)
-		e.processTree(densestTree.Neighbour, inChan)
+		e.processTree(densestTree)
+		e.processTree(densestTree.Neighbour)
 	}
 }
 
 func (e *Explorer) processTree(
 	tree *ReportTree,
-	inChan chan<- *ReportTree,
 ) {
 	if tree == nil {
 		return
 	}
+
+	var sendingToDiggerStartTime time.Time
 
 	if tree.Density >= 1 && tree.AreaSize == 1 {
 		// send to digger chan
@@ -239,12 +261,16 @@ func (e *Explorer) processTree(
 			treasureChan = e.treasureCoordChanUrgent
 		}
 
-		sendingToDiggerStartTime := time.Now()
+		if e.showStat {
+			sendingToDiggerStartTime = time.Now()
+		}
 		select {
 		case treasureChan <- tree.Report:
-			e.requestTimeMutex.Lock()
-			e.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
-			e.requestTimeMutex.Unlock()
+			if e.showStat {
+				e.explorerStat.requestTimeMutex.Lock()
+				e.explorerStat.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
+				e.explorerStat.requestTimeMutex.Unlock()
+			}
 		}
 
 		return
@@ -304,6 +330,6 @@ func (e *Explorer) processTree(
 		tree.Children[0].Neighbour = tree.Children[1]
 		tree.Children[1].Neighbour = tree.Children[0]
 
-		inChan <- tree.Children[0]
+		e.inChan <- tree.Children[0]
 	}
 }

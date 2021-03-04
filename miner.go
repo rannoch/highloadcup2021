@@ -47,10 +47,13 @@ type Miner struct {
 	cashiers []*Cashier
 
 	client *Client
+
+	showStat bool
 }
 
-func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licensorsCount int) *Miner {
+func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licensorsCount int, showStat bool) *Miner {
 	m := &Miner{client: client}
+	m.showStat = showStat
 
 	var treasureCoordChan = make(chan model.Report, 10)
 	var treasureCoordChanUrgent = make(chan model.Report, 10)
@@ -59,16 +62,16 @@ func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licen
 	var licensorChan = make(chan model.License)
 
 	for i := 0; i < diggersCount; i++ {
-		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, treasureCoordChanUrgent, cashierChan, licensorChan))
+		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, treasureCoordChanUrgent, cashierChan, licensorChan, showStat))
 	}
 
-	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount)
+	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount, showStat)
 
 	for i := 0; i < cashiersCount; i++ {
 		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan))
 	}
 
-	m.licensor = NewLicensor(client, licensorChan, licensorsCount)
+	m.licensor = NewLicensor(client, licensorChan, licensorsCount, showStat)
 
 	return m
 }
@@ -89,15 +92,11 @@ func (miner *Miner) healthCheck() {
 }
 
 func (miner *Miner) Start() error {
-	miner.healthCheck()
-
 	go miner.licensor.Start()
 
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
-
-	go miner.explorer.Start(&wg)
 
 	wg.Add(len(miner.diggers))
 	for _, digger := range miner.diggers {
@@ -109,7 +108,14 @@ func (miner *Miner) Start() error {
 		go cashier.Start(&wg)
 	}
 
-	go miner.printStat()
+	if miner.showStat {
+		go miner.printStat()
+	}
+
+	miner.explorer.Init()
+
+	miner.healthCheck()
+	go miner.explorer.Start(&wg)
 
 	wg.Wait()
 

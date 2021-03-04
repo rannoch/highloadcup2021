@@ -56,8 +56,10 @@ func (tree *RedBlackTreeExtended) RemoveMax() interface{} {
 
 		if node.Left != nil {
 			tree.maxNodeValue = node.Left.Value
-		} else {
+		} else if node.Parent != nil {
 			tree.maxNodeValue = node.Parent.Value
+		} else {
+			tree.maxNodeValue = nil
 		}
 		return node.Value
 	}
