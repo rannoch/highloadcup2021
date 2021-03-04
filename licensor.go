@@ -1,6 +1,11 @@
 package main
 
-import "github.com/rannoch/highloadcup2021/model"
+import (
+	"fmt"
+	"github.com/rannoch/highloadcup2021/model"
+	"sync"
+	"time"
+)
 
 type Licensor struct {
 	client *Client
@@ -12,6 +17,18 @@ type Licensor struct {
 	licensesIssued int
 
 	workerCount int
+
+	stat LicensorStat
+}
+
+type LicensorStat struct {
+	FreeLicensesIssued int
+	PaidLicensesIssued int
+	Mutex              sync.RWMutex
+}
+
+func (l *LicensorStat) String() string {
+	return fmt.Sprintf("Free licenses issued: %d\nPaid licenses issued: %d\n", l.FreeLicensesIssued, l.PaidLicensesIssued)
 }
 
 func NewLicensor(client *Client, getLicenseChan chan<- model.License, workerCount int) *Licensor {
@@ -20,6 +37,14 @@ func NewLicensor(client *Client, getLicenseChan chan<- model.License, workerCoun
 	l.workerCount = workerCount
 
 	return l
+}
+
+func (licensor *Licensor) PrintStat(duration time.Duration) {
+	licensor.stat.Mutex.RLock()
+	println("Licenses stat after: " + duration.String())
+	println("Paid licenses count:", licensor.stat.PaidLicensesIssued, ", Free licenses count:", licensor.stat.FreeLicensesIssued)
+	println()
+	licensor.stat.Mutex.RUnlock()
 }
 
 func (licensor *Licensor) GetLicense() model.License {
@@ -57,7 +82,7 @@ func (licensor *Licensor) Start() {
 		}(licensor.licenseIssueChan, addLicenseChan)
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < licensor.workerCount; i++ {
 		licensor.queueLicense()
 	}
 
@@ -67,11 +92,19 @@ func (licensor *Licensor) Start() {
 			if len(licensor.licenses) > 0 {
 				licensor.licenses = licensor.licenses[1:]
 
-				if len(licensor.licenses)+licensor.licensesIssued < 5 {
+				if len(licensor.licenses)+licensor.licensesIssued < (10 - licensor.workerCount) {
 					licensor.queueLicense()
 				}
 			}
 		case license := <-addLicenseChan:
+			licensor.stat.Mutex.Lock()
+			if license.DigAllowed == 5 {
+				licensor.stat.PaidLicensesIssued++
+			} else {
+				licensor.stat.FreeLicensesIssued++
+			}
+			licensor.stat.Mutex.Unlock()
+
 			licensor.licensesIssued--
 			licensor.licenses = append(licensor.licenses, license)
 		}

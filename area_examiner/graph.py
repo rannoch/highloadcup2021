@@ -8,6 +8,7 @@ if __name__ == '__main__':
     print(np.std(arr))
     print(np.max(arr))
     print(np.min(arr))
+    print(np.sum(arr))
 
     arr = np.sort(arr)
 

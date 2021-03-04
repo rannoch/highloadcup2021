@@ -22,8 +22,6 @@ func NewClient(httpClient *fasthttp.Client, baseUrl string) *Client {
 }
 
 func (client *Client) IssueLicense(coin []int32) (model.License, int, error) {
-	start := time.Now()
-
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req) // <- do not forget to release
 
@@ -44,10 +42,6 @@ func (client *Client) IssueLicense(coin []int32) (model.License, int, error) {
 	err = client.httpClient.Do(req, resp)
 	if client.Debug {
 		fmt.Println(req.String() + "\n" + resp.String())
-	}
-
-	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
-		fmt.Printf("%s took %v\n\n", "IssueLicense", time.Since(start))
 	}
 
 	if err != nil {
@@ -133,7 +127,7 @@ func (client *Client) GetBalance() (model.Balance, int, error) {
 	return balance, resp.StatusCode(), nil
 }
 
-func (client *Client) ExploreArea(area model.Area) (model.Report, int, error) {
+func (client *Client) ExploreArea(area model.Area) (model.Report, int, time.Duration, error) {
 	start := time.Now()
 
 	req := fasthttp.AcquireRequest()
@@ -145,7 +139,7 @@ func (client *Client) ExploreArea(area model.Area) (model.Report, int, error) {
 
 	requestBody, err := area.MarshalJSON()
 	if err != nil {
-		return model.Report{}, 0, err
+		return model.Report{}, 0, time.Since(start), err
 	}
 
 	req.SetBody(requestBody)
@@ -163,21 +157,19 @@ func (client *Client) ExploreArea(area model.Area) (model.Report, int, error) {
 	}
 
 	if err != nil {
-		return model.Report{}, resp.StatusCode(), err
+		return model.Report{}, resp.StatusCode(), time.Since(start), err
 	}
 
 	var report model.Report
 
 	if err := json.Unmarshal(resp.Body(), &report); err != nil {
-		return model.Report{}, resp.StatusCode(), err
+		return model.Report{}, resp.StatusCode(), time.Since(start), err
 	}
 
-	return report, resp.StatusCode(), nil
+	return report, resp.StatusCode(), time.Since(start), nil
 }
 
 func (client *Client) Dig(dig model.Dig) ([]string, int, error) {
-	start := time.Now()
-
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(client.baseUrl + "/dig")
 	req.Header.SetContentType("application/json")
@@ -200,10 +192,6 @@ func (client *Client) Dig(dig model.Dig) ([]string, int, error) {
 		fmt.Println(req.String() + "\n" + resp.String())
 	}
 
-	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
-		fmt.Printf("%s took %v\n\n", "Dig", time.Since(start))
-	}
-
 	if err != nil {
 		return nil, resp.StatusCode(), err
 	}
@@ -220,8 +208,6 @@ func (client *Client) Dig(dig model.Dig) ([]string, int, error) {
 }
 
 func (client *Client) Cash(treasure string) ([]int32, int, error) {
-	start := time.Now()
-
 	req := fasthttp.AcquireRequest()
 	req.SetRequestURI(client.baseUrl + "/cash")
 	req.Header.SetContentType("application/json")
@@ -237,10 +223,6 @@ func (client *Client) Cash(treasure string) ([]int32, int, error) {
 	err := client.httpClient.Do(req, resp)
 	if client.Debug {
 		fmt.Println(req.String() + "\n" + resp.String())
-	}
-
-	if client.Slowlog != 0 && time.Since(start) > client.Slowlog {
-		fmt.Printf("%s took %v\n\n", "Cash", time.Since(start))
 	}
 
 	if err != nil {

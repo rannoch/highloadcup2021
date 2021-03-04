@@ -29,65 +29,71 @@ func NewDigger(
 	}
 }
 
-func (digger *Digger) hasActiveLicense() bool {
+func (digger Digger) hasActiveLicense() bool {
 	return digger.license.DigAllowed > digger.license.DigUsed
 }
 
 func (digger *Digger) Start(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	for report := range digger.treasureReportChan {
-		var left = report.Amount
+	var depth int32
+	var x, y int32
+	var report model.Report
 
-		for x := report.Area.PosX; x < report.Area.PosX+report.Area.SizeX; x++ {
-			for y := report.Area.PosY; y < report.Area.PosY+report.Area.SizeY; y++ {
-				var depth int32 = 1
+	for {
+		select {
+		case report = <-digger.treasureReportChan:
+			var left = report.Amount
 
-				for depth <= 10 && left > 0 {
-					// get license
-					if !digger.hasActiveLicense() {
-						digger.license = <-digger.getLicenseChan
-					}
+			for x = report.Area.PosX; x < report.Area.PosX+report.Area.SizeX; x++ {
+				for y = report.Area.PosY; y < report.Area.PosY+report.Area.SizeY; y++ {
+					depth = 1
 
-					// dig
-					treasures, digRespCode, _ := digger.client.Dig(model.Dig{
-						LicenseID: digger.license.Id,
-						PosX:      x,
-						PosY:      y,
-						Depth:     depth,
-					})
-
-					if digRespCode == 200 && len(treasures) == 0 {
-						continue
-					}
-
-					if digRespCode == 403 {
-						digger.license.DigAllowed = 0
-						continue
-					}
-
-					if digRespCode >= 500 {
-						continue
-					}
-
-					depth++
-					digger.license.DigUsed++
-
-					if digRespCode == 404 {
-						continue
-					}
-
-					if digRespCode == 422 {
-						continue
-					}
-
-					if len(treasures) > 0 {
-						for _, treasure := range treasures {
-							digger.cashierChan <- treasure
+					for depth <= 10 && left > 0 {
+						// get license
+						if !digger.hasActiveLicense() {
+							digger.license = <-digger.getLicenseChan
 						}
 
-						left = left - int32(len(treasures))
-						break
+						// dig
+						treasures, digRespCode, _ := digger.client.Dig(model.Dig{
+							LicenseID: digger.license.Id,
+							PosX:      x,
+							PosY:      y,
+							Depth:     depth,
+						})
+
+						if digRespCode == 200 && len(treasures) == 0 {
+							continue
+						}
+
+						if digRespCode == 403 {
+							digger.license.DigAllowed = 0
+							continue
+						}
+
+						if digRespCode >= 500 {
+							continue
+						}
+
+						depth++
+						digger.license.DigUsed++
+
+						if digRespCode == 404 {
+							continue
+						}
+
+						if digRespCode == 422 {
+							continue
+						}
+
+						if len(treasures) > 0 {
+							for i := range treasures {
+								digger.cashierChan <- treasures[i]
+							}
+
+							left = left - int32(len(treasures))
+						}
 					}
 				}
 			}

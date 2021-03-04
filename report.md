@@ -280,3 +280,48 @@ Layer#	Tot.treas	Tot.treas.val	Avg.treas.val	Treas.dens	Treas.val.dens
     10	    48012	      3380308	        70.41	   0.00392	       0.27594
 Final balance: 83051
 </pre>
+
+<pre>
+*** CLIENT REPORT ***
+Balance:	156236
+Licenses active:	8
+Free licenses issued:	8
+Paid licenses issued:	4846
+Single point explores done:	3564
+Single point explores with treasures found:	1859
+Single point explore treasure found rate:	0.52160
+Digs done:	24221
+Dig success rate:	0.17555
+Treasures found:	4252
+Total found treasure value:	161106
+Treasures exchanged:	4251
+Total exchanged treasure value:	161082
+Treasure exchange efficiency:	0.99976
+Treasures not exchanged:	1
+
+*** WORLD REPORT ***
+Configuration:	3500 x 3500 x 10
+Total treasures:	474477
+Total treasure value:	18543955
+Avg treasure value:	39.08
+Points with treasure density:	0.03807
+Treasure density:	0.00387
+Treasure value density:	0.15138
+* LAYER STATS *
+Layer#	Tot.treas	Tot.treas.val	Avg.treas.val	Treas.dens	Treas.val.dens
+     1	    45017	       317911	         7.06	   0.00367	       0.02595
+     2	    46832	       663076	        14.16	   0.00382	       0.05413
+     3	    47266	       997210	        21.10	   0.00386	       0.08140
+     4	    47328	      1338399	        28.28	   0.00386	       0.10926
+     5	    48188	      1695643	        35.19	   0.00393	       0.13842
+     6	    47792	      2020559	        42.28	   0.00390	       0.16494
+     7	    48454	      2407097	        49.68	   0.00396	       0.19650
+     8	    47875	      2694798	        56.29	   0.00391	       0.21998
+     9	    47911	      3039826	        63.45	   0.00391	       0.24815
+    10	    47814	      3369436	        70.47	   0.00390	       0.27506
+127.0.0.1 - - [2021-03-02 05:23:55] "POST /cash HTTP/1.1" 200 352 1.801944
+127.0.0.1 - - [2021-03-02 05:23:55] "POST /licenses HTTP/1.1" 200 160 1.802381
+127.0.0.1 - - [2021-03-02 05:23:55] "POST /explore HTTP/1.1" 200 210 1.802866
+127.0.0.1 - - [2021-03-02 05:23:55] "POST /explore HTTP/1.1" 500 161 1.803753
+Final balance: 156259
+</pre>

@@ -80,7 +80,7 @@ func (miner *Miner) healthCheck() {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Millisecond)
 	}
 
 	fmt.Println("healthCheck passed")
@@ -107,7 +107,21 @@ func (miner *Miner) Start() error {
 		go cashier.Start(&wg)
 	}
 
+	go miner.printStat()
+
 	wg.Wait()
 
 	return nil
+}
+
+func (miner *Miner) printStat() {
+	startTime := time.Now()
+
+	for {
+		select {
+		case t := <-time.After(10 * time.Second):
+			miner.explorer.PrintStat(t.Sub(startTime))
+			miner.licensor.PrintStat(t.Sub(startTime))
+		}
+	}
 }
