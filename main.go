@@ -38,7 +38,7 @@ func main() {
 
 	showStat := true
 
-	miner := NewMiner(apiClient, 5, 5, 10, 5, showStat)
+	miner := NewMiner(apiClient, 5, 7, 9, 5, showStat)
 
 	err = miner.Start()
 	fmt.Println(err)

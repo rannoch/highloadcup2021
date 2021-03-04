@@ -179,8 +179,7 @@ func (e *Explorer) PrintStat(duration time.Duration) {
 	e.explorerStat.requestTimeMutex.RLock()
 	requestTimeString, _ := json.Marshal(e.explorerStat.requestTimeByArea)
 
-	println("Explores total after " + duration.String())
-	println(e.explorerStat.requestsTotal)
+	println("Explores total after "+duration.String(), e.explorerStat.requestsTotal)
 
 	println("Explore requests time by area stat after " + duration.String())
 	println(string(requestTimeString))

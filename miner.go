@@ -68,7 +68,7 @@ func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licen
 	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount, showStat)
 
 	for i := 0; i < cashiersCount; i++ {
-		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan))
+		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan, showStat))
 	}
 
 	m.licensor = NewLicensor(client, licensorChan, licensorsCount, showStat)
@@ -108,14 +108,14 @@ func (miner *Miner) Start() error {
 		go cashier.Start(&wg)
 	}
 
-	if miner.showStat {
-		go miner.printStat()
-	}
-
 	miner.explorer.Init()
 
 	miner.healthCheck()
 	go miner.explorer.Start(&wg)
+
+	if miner.showStat {
+		go miner.printStat()
+	}
 
 	wg.Wait()
 
@@ -132,7 +132,8 @@ func (miner *Miner) printStat() {
 
 			miner.explorer.PrintStat(sub)
 			miner.licensor.PrintStat(sub)
-			DiggerStat.printDiggerStat(sub)
+			DiggerStat.printStat(sub)
+			CashierStat.printStat(sub)
 		}
 	}
 }

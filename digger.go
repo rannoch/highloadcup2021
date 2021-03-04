@@ -7,18 +7,25 @@ import (
 	"time"
 )
 
-var DiggerStat = diggerStat{}
+var DiggerStat = diggerStat{
+	ResponseCodes: make(map[int]int),
+}
 
 type diggerStat struct {
 	mutex                    sync.RWMutex
 	TreasuresTotal           int
 	CashierChanWaitTimeTotal time.Duration
+	GetLicenseStartTimeTotal time.Duration
+	ResponseCodes            map[int]int
 }
 
-func (d *diggerStat) printDiggerStat(duration time.Duration) {
+func (d *diggerStat) printStat(duration time.Duration) {
 	d.mutex.RLock()
 	println("Digger treasures total after " + duration.String() + " " + strconv.Itoa(d.TreasuresTotal))
 	println("Digger wait for cashier total after " + duration.String() + " " + d.CashierChanWaitTimeTotal.String())
+	println("Digger wait for license total after " + duration.String() + " " + d.GetLicenseStartTimeTotal.String())
+	responseCodesJson, _ := json.Marshal(d.ResponseCodes)
+	println("Digger response codes: " + string(responseCodesJson))
 	d.mutex.RUnlock()
 	println()
 }
@@ -81,14 +88,24 @@ func (digger *Digger) Start(wg *sync.WaitGroup) {
 
 func (digger *Digger) dig(report model.Report) {
 	var sendingToCashierStartTime time.Time
+	var getLicenseStartTime time.Time
+
 	var left = report.Amount
 
 	var depth int32 = 1
 
 	for depth <= 10 && left > 0 {
 		// get license
-		if !digger.hasActiveLicense() {
+		if digger.showStat {
+			getLicenseStartTime = time.Now()
+		}
+		for !digger.hasActiveLicense() {
 			digger.license = <-digger.getLicenseChan
+		}
+		if digger.showStat {
+			DiggerStat.mutex.Lock()
+			DiggerStat.GetLicenseStartTimeTotal += time.Now().Sub(getLicenseStartTime)
+			DiggerStat.mutex.Unlock()
 		}
 
 		// dig
@@ -98,6 +115,12 @@ func (digger *Digger) dig(report model.Report) {
 			PosY:      report.Area.PosY,
 			Depth:     depth,
 		})
+
+		if digger.showStat {
+			DiggerStat.mutex.Lock()
+			DiggerStat.ResponseCodes[digRespCode]++
+			DiggerStat.mutex.Unlock()
+		}
 
 		if digRespCode == 200 && len(treasures) == 0 {
 			continue
