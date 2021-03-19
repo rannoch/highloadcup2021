@@ -1,7 +1,9 @@
-package main
+package miner
 
 import (
-	"github.com/rannoch/highloadcup2021/model"
+	"encoding/json"
+	"github.com/rannoch/highloadcup2021/api_client"
+	"github.com/rannoch/highloadcup2021/miner/model"
 	"strconv"
 	"sync"
 	"time"
@@ -31,13 +33,15 @@ func (d *diggerStat) printStat(duration time.Duration) {
 }
 
 type Digger struct {
-	client *Client
+	client *api_client.Client
 
 	treasureReportChan       <-chan model.Report
 	treasureReportChanUrgent <-chan model.Report
 
-	cashierChan    chan<- string
-	getLicenseChan <-chan model.License
+	cashierChan       chan<- model.Treasure
+	cashierChanUrgent chan<- model.Treasure
+
+	licensor *Licensor
 
 	license model.License
 
@@ -45,11 +49,12 @@ type Digger struct {
 }
 
 func NewDigger(
-	client *Client,
+	client *api_client.Client,
 	treasureReportChan <-chan model.Report,
 	treasureReportChanUrgent <-chan model.Report,
-	cashierChan chan<- string,
-	getLicenseChan <-chan model.License,
+	cashierChan chan<- model.Treasure,
+	cashierChanUrgent chan<- model.Treasure,
+	licensor *Licensor,
 	showStat bool,
 ) *Digger {
 	return &Digger{
@@ -57,7 +62,8 @@ func NewDigger(
 		treasureReportChan:       treasureReportChan,
 		treasureReportChanUrgent: treasureReportChanUrgent,
 		cashierChan:              cashierChan,
-		getLicenseChan:           getLicenseChan,
+		cashierChanUrgent:        cashierChanUrgent,
+		licensor:                 licensor,
 		showStat:                 showStat,
 	}
 }
@@ -100,7 +106,7 @@ func (digger *Digger) dig(report model.Report) {
 			getLicenseStartTime = time.Now()
 		}
 		for !digger.hasActiveLicense() {
-			digger.license = <-digger.getLicenseChan
+			digger.license = digger.getLicense()
 		}
 		if digger.showStat {
 			DiggerStat.mutex.Lock()
@@ -109,12 +115,14 @@ func (digger *Digger) dig(report model.Report) {
 		}
 
 		// dig
-		treasures, digRespCode, _ := digger.client.Dig(model.Dig{
-			LicenseID: digger.license.Id,
-			PosX:      report.Area.PosX,
-			PosY:      report.Area.PosY,
-			Depth:     depth,
-		})
+		treasureIds, digRespCode, _ := digger.client.Dig(
+			model.Dig{
+				LicenseID: digger.license.Id,
+				PosX:      report.Area.PosX,
+				PosY:      report.Area.PosY,
+				Depth:     depth,
+			},
+		)
 
 		if digger.showStat {
 			DiggerStat.mutex.Lock()
@@ -122,7 +130,7 @@ func (digger *Digger) dig(report model.Report) {
 			DiggerStat.mutex.Unlock()
 		}
 
-		if digRespCode == 200 && len(treasures) == 0 {
+		if digRespCode == 200 && len(treasureIds) == 0 {
 			continue
 		}
 
@@ -146,19 +154,31 @@ func (digger *Digger) dig(report model.Report) {
 			continue
 		}
 
-		if len(treasures) > 0 {
+		if len(treasureIds) > 0 {
 			if digger.showStat {
 				DiggerStat.mutex.Lock()
 				DiggerStat.TreasuresTotal++
 				DiggerStat.mutex.Unlock()
 			}
 
-			for i := range treasures {
+			for i := range treasureIds {
 				if digger.showStat {
 					sendingToCashierStartTime = time.Now()
 				}
+
+				treasure := model.Treasure{
+					Id:    treasureIds[i],
+					Depth: depth - 1,
+				}
+
+				cashierChan := digger.cashierChan
+
+				if treasure.Depth > 5 {
+					cashierChan = digger.cashierChanUrgent
+				}
+
 				select {
-				case digger.cashierChan <- treasures[i]:
+				case cashierChan <- treasure:
 					if digger.showStat {
 						DiggerStat.mutex.Lock()
 						DiggerStat.CashierChanWaitTimeTotal += time.Now().Sub(sendingToCashierStartTime)
@@ -167,7 +187,22 @@ func (digger *Digger) dig(report model.Report) {
 				}
 			}
 
-			left = left - int32(len(treasures))
+			left = left - int32(len(treasureIds))
+		}
+	}
+}
+
+func (digger *Digger) getLicense() model.License {
+	coinsFromWallet := PopCoinsFromWallet()
+
+	for {
+		license, respCode, _ := digger.client.IssueLicense(coinsFromWallet)
+		if respCode == 409 {
+			continue
+		}
+
+		if respCode == 200 {
+			return license
 		}
 	}
 }

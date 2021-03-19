@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	openapi "github.com/rannoch/highloadcup2021/client"
+	openapi "github.com/rannoch/highloadcup2021/api_client"
 	"log"
 	"net/http"
 	"net/url"

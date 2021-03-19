@@ -1,13 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"github.com/rannoch/highloadcup2021/api_client"
-	"github.com/rannoch/highloadcup2021/miner"
+	"github.com/rannoch/highloadcup2021/model"
 	"github.com/valyala/fasthttp"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
 	"net/url"
 	"os"
 )
@@ -35,13 +33,14 @@ func main() {
 		//WriteTimeout:    20 * time.Second,
 	}
 	apiClient := api_client.NewClient(fastHttpClient, urlParsed.String())
-	//apiClient.Debug = true
-	//apiClient.Slowlog = time.Second
+}
 
-	showStat := true
+func start(apiClient *api_client.Client) {
+	var license model.License
 
-	m := miner.NewMiner(apiClient, 10, 7, 9, 10, showStat)
+	for x := 0; x < 100; x++ {
+		for y := 0; y < 100; y++ {
 
-	err = m.Start()
-	fmt.Println(err)
+		}
+	}
 }

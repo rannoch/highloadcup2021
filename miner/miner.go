@@ -1,8 +1,9 @@
-package main
+package miner
 
 import (
 	"fmt"
-	"github.com/rannoch/highloadcup2021/model"
+	"github.com/rannoch/highloadcup2021/api_client"
+	"github.com/rannoch/highloadcup2021/miner/model"
 	"sync"
 	"time"
 )
@@ -13,32 +14,41 @@ var walletMutex sync.RWMutex
 func AddToWallet(v []int32) {
 	walletMutex.Lock()
 	wallet = append(wallet, v...)
-	if len(wallet) > 100 {
-		wallet = wallet[:100]
+	if len(wallet) > 1000 {
+		wallet = wallet[:1000]
 	}
 
 	walletMutex.Unlock()
 }
 
-func PopCoinFromWallet() []int32 {
-	walletMutex.RLock()
-	walletLen := len(wallet)
-	walletMutex.RUnlock()
-
-	if walletLen == 0 {
-		return []int32{}
-	}
-
+func PopCoinsFromWallet() []int32 {
 	walletMutex.Lock()
 	defer walletMutex.Unlock()
-	coin := []int32{wallet[0]}
-	wallet = wallet[1:]
-	return coin
+	var coins []int32
+
+	switch {
+	case len(wallet) >= 21:
+		coins = make([]int32, 21)
+		copy(coins, wallet[:21])
+		wallet = wallet[21:]
+	case len(wallet) >= 11:
+		coins = make([]int32, 11)
+		copy(coins, wallet[:11])
+		wallet = wallet[11:]
+	case len(wallet) >= 6:
+		coins = make([]int32, 6)
+		copy(coins, wallet[:6])
+		wallet = wallet[6:]
+	case len(wallet) >= 1:
+		coins = []int32{wallet[0]}
+		wallet = wallet[1:]
+	default:
+		coins = []int32{}
+	}
+	return coins
 }
 
 type Miner struct {
-	balance model.Balance
-
 	explorer *Explorer
 	licensor *Licensor
 
@@ -46,32 +56,38 @@ type Miner struct {
 
 	cashiers []*Cashier
 
-	client *Client
+	client *api_client.Client
 
 	showStat bool
 }
 
-func NewMiner(client *Client, diggersCount, cashiersCount, explorersCount, licensorsCount int, showStat bool) *Miner {
+func NewMiner(
+	client *api_client.Client,
+	diggersCount, cashiersCount, explorersCount, licensorsCount int,
+	showStat bool,
+) *Miner {
 	m := &Miner{client: client}
 	m.showStat = showStat
 
 	var treasureCoordChan = make(chan model.Report, 10)
 	var treasureCoordChanUrgent = make(chan model.Report, 10)
 
-	var cashierChan = make(chan string, 10)
-	var licensorChan = make(chan model.License)
+	var cashierChan = make(chan model.Treasure, 10000)
+	var cashierChanUrgent = make(chan model.Treasure, 10)
+
+	var licensorChan = make(chan model.License, 10-licensorsCount)
+
+	m.licensor = NewLicensor(client, licensorChan, licensorsCount, showStat)
 
 	for i := 0; i < diggersCount; i++ {
-		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, treasureCoordChanUrgent, cashierChan, licensorChan, showStat))
+		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, treasureCoordChanUrgent, cashierChan, cashierChanUrgent, m.licensor, showStat))
 	}
 
 	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount, showStat)
 
 	for i := 0; i < cashiersCount; i++ {
-		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan, showStat))
+		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan, cashierChanUrgent, showStat))
 	}
-
-	m.licensor = NewLicensor(client, licensorChan, licensorsCount, showStat)
 
 	return m
 }
@@ -92,7 +108,7 @@ func (miner *Miner) healthCheck() {
 }
 
 func (miner *Miner) Start() error {
-	go miner.licensor.Start()
+	miner.licensor.Init()
 
 	wg := sync.WaitGroup{}
 
@@ -112,6 +128,8 @@ func (miner *Miner) Start() error {
 
 	miner.healthCheck()
 	go miner.explorer.Start(&wg)
+
+	//miner.licensor.Start()
 
 	if miner.showStat {
 		go miner.printStat()

@@ -15,4 +15,4 @@ build:
 	$(GOBUILD) -o $(BINARY_NAME)
 
 generate:
-	$(OPENAPIGENERATOR) generate -g go --global-property models --additional-properties=isGoSubmodule=false,packageName=model -i swagger.yaml -o models
+	$(OPENAPIGENERATOR) generate -g go --global-property models --additional-properties=isGoSubmodule=false,packageName=model -i swagger.yaml -o miner/models

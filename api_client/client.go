@@ -1,9 +1,9 @@
-package main
+package api_client
 
 import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/rannoch/highloadcup2021/model"
+	"github.com/rannoch/highloadcup2021/miner/model"
 	"github.com/valyala/fasthttp"
 	"time"
 )

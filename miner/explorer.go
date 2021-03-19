@@ -1,15 +1,17 @@
-package main
+package miner
 
 import (
+	"encoding/json"
 	rbt "github.com/emirpasic/gods/trees/redblacktree"
-	"github.com/rannoch/highloadcup2021/model"
+	"github.com/rannoch/highloadcup2021/api_client"
+	"github.com/rannoch/highloadcup2021/miner/model"
 	"math"
 	"sync"
 	"time"
 )
 
 type Explorer struct {
-	client *Client
+	client *api_client.Client
 
 	treasureReportChan      chan<- model.Report
 	treasureCoordChanUrgent chan<- model.Report
@@ -36,7 +38,7 @@ type explorerStat struct {
 }
 
 func NewExplorer(
-	client *Client,
+	client *api_client.Client,
 	treasureReportChan, treasureCoordChanUrgent chan<- model.Report,
 	workerCount int,
 	showStat bool,
