@@ -163,10 +163,6 @@ func (digger *Digger) dig(report model.Report) {
 
 			left = left - int32(len(treasureIds))
 
-			//if depth <= 3 {
-			//	continue
-			//}
-
 			for i := range treasureIds {
 				if digger.showStat {
 					sendingToCashierStartTime = time.Now()

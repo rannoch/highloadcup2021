@@ -92,7 +92,7 @@ func NewExplorer(
 }
 
 func (e *Explorer) Init() {
-	const part int32 = 7
+	const part int32 = 5
 	const xSize = 3500
 	const ySize = 3500
 
