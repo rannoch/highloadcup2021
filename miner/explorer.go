@@ -1,12 +1,13 @@
 package miner
 
 import (
+	"container/heap"
 	"encoding/json"
-	rbt "github.com/emirpasic/gods/trees/redblacktree"
 	"github.com/rannoch/highloadcup2021/api_client"
 	"github.com/rannoch/highloadcup2021/miner/model"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -16,16 +17,48 @@ type Explorer struct {
 	treasureReportChan      chan<- model.Report
 	treasureCoordChanUrgent chan<- model.Report
 
-	reportTreesSortedByDensity *RedBlackTreeExtended
-
-	inChan  chan *ReportTree
-	outChan chan *ReportTree
+	priorityQueue      PriorityQueue
+	priorityQueueIndex int64
+	priorityQueueMutex sync.RWMutex
 
 	workerCount int
 
 	explorerStat explorerStat
 
 	showStat bool
+}
+
+type PriorityQueue []model.ExploreArea
+
+func (p PriorityQueue) Len() int {
+	return len(p)
+}
+
+func (p PriorityQueue) Less(i, j int) bool {
+	return p[i].ParentReport.Density() == 0 || p[i].ParentReport.Density() > p[j].ParentReport.Density()
+}
+
+func (p PriorityQueue) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+	p[i].Index = int64(i)
+	p[j].Index = int64(j)
+}
+
+func (p *PriorityQueue) Push(x interface{}) {
+	n := len(*p)
+	item := x.(model.ExploreArea)
+	item.Index = int64(n)
+	*p = append(*p, item)
+}
+
+func (p *PriorityQueue) Pop() interface{} {
+	old := *p
+	n := len(old)
+	item := old[n-1]
+	//old[n-1] = nil  // avoid memory leak
+	item.Index = -1 // for safety
+	*p = old[0 : n-1]
+	return item
 }
 
 type explorerStat struct {
@@ -49,86 +82,16 @@ func NewExplorer(
 	e.explorerStat.requestTimeByArea = make(map[int32]time.Duration)
 	e.explorerStat.requestCountByArea = make(map[int32]int64)
 
-	e.inChan = make(chan *ReportTree, 1000)
-	e.outChan = make(chan *ReportTree, 0)
+	e.priorityQueue = make([]model.ExploreArea, 0, 10000)
+
+	heap.Init(&e.priorityQueue)
 
 	e.showStat = showStat
 
 	return e
 }
 
-func (r *ReportTree) setReport(report model.Report) {
-	r.Report = report
-
-	r.calculateDensity()
-	r.AreaSize = report.Area.SizeX * report.Area.SizeY
-}
-
-func (r *ReportTree) setAmount(amount int32) {
-	r.Report.Amount = amount
-
-	r.calculateDensity()
-}
-
-func (r *ReportTree) calculateDensity() {
-	if r.Report.Area.SizeX*r.Report.Area.SizeY == 0 {
-		r.Density = 0
-		return
-	}
-
-	r.Density = float32(r.Report.Amount) / float32(r.Report.Area.SizeX*r.Report.Area.SizeY)
-}
-
-type ReportTree struct {
-	Report model.Report
-
-	Density float32
-
-	AreaSize int32
-
-	Parent *ReportTree
-
-	Children []*ReportTree
-
-	Neighbour *ReportTree
-}
-
-var reportTreeComparator = rbt.NewWith(func(a, b interface{}) int {
-	if b == nil {
-		return 1
-	}
-
-	reportTree1 := a.(*ReportTree)
-	reportTree2 := b.(*ReportTree)
-
-	switch true {
-	case reportTree1.Report == reportTree2.Report:
-		return 0
-	case reportTree1.Parent.Density == 0 || reportTree1.Parent.Density > reportTree2.Parent.Density:
-		return 1
-	case reportTree1.Parent.Density < reportTree2.Parent.Density:
-		return -1
-	}
-
-	return 1
-})
-
 func (e *Explorer) Init() {
-	rootReportTree := &ReportTree{
-		Report: model.Report{
-			Area: model.Area{
-				PosX:  0,
-				PosY:  0,
-				SizeX: 3500,
-				SizeY: 3500,
-			},
-			Amount: 0,
-		},
-		Density: 0,
-
-		Parent: nil,
-	}
-
 	const xStep = 350
 	const yStep = 350
 
@@ -141,39 +104,22 @@ func (e *Explorer) Init() {
 			SizeY: yStep,
 		}
 
-		rootReportTree.Children = append(rootReportTree.Children, &ReportTree{
-			Report: model.Report{
-				Area: area,
+		heap.Push(
+			&e.priorityQueue, model.ExploreArea{
+				Index:        e.priorityQueueIndex,
+				AreaSection1: area,
 			},
-			Parent: rootReportTree,
-		})
-	}
+		)
 
-	e.reportTreesSortedByDensity = NewRedBlackTreeExtended(reportTreeComparator)
-
-	for _, child := range rootReportTree.Children {
-		e.reportTreesSortedByDensity.Put(child, child)
+		e.priorityQueueIndex++
 	}
 }
 
 func (e *Explorer) Start(wg *sync.WaitGroup) {
-	go e.reportTreeSorter()
-
 	wg.Add(e.workerCount)
 
 	for i := 0; i < e.workerCount; i++ {
 		go e.explore(wg)
-	}
-}
-
-func (e *Explorer) reportTreeSorter() {
-	for {
-		select {
-		case reportTree := <-e.inChan:
-			e.reportTreesSortedByDensity.Put(reportTree, reportTree)
-		case e.outChan <- e.reportTreesSortedByDensity.GetMaxNodeValue():
-			e.reportTreesSortedByDensity.RemoveMax()
-		}
 	}
 }
 
@@ -211,54 +157,52 @@ func (e *Explorer) explore(
 ) {
 	wg.Done()
 
-	for densestTree := range e.outChan {
-		if densestTree == nil {
-			continue
-		}
+	for {
+		e.priorityQueueMutex.Lock()
+		exploreArea := heap.Pop(&e.priorityQueue).(model.ExploreArea)
+		e.priorityQueueMutex.Unlock()
 
 		// explore left and calculate neighbor amount
 		for {
-			report, respCode, requestTime, _ := e.client.ExploreArea(densestTree.Report.Area)
+			report, respCode, requestTime, _ := e.client.ExploreArea(exploreArea.AreaSection1)
 
 			// stat
 			if e.showStat {
 				e.explorerStat.requestTimeMutex.Lock()
 				e.explorerStat.requestsTotal++
-				e.explorerStat.requestTimeByArea[densestTree.Report.Area.SizeX*densestTree.Report.Area.SizeY] += requestTime
-				e.explorerStat.requestCountByArea[densestTree.Report.Area.SizeX*densestTree.Report.Area.SizeY]++
+				e.explorerStat.requestTimeByArea[exploreArea.AreaSection1.Size()] += requestTime
+				e.explorerStat.requestCountByArea[exploreArea.AreaSection1.Size()]++
 				e.explorerStat.requestTimeMutex.Unlock()
 			}
 
 			if respCode == 200 {
-				densestTree.setReport(report)
+				e.processReport(report)
+
+				if !exploreArea.AreaSection2.Empty() {
+					report2 := model.Report{
+						Area:   exploreArea.AreaSection2,
+						Amount: exploreArea.ParentReport.Amount - report.Amount,
+					}
+
+					e.processReport(report2)
+				}
+
 				break
 			}
 		}
-
-		// update neighbour amount
-		if densestTree.Neighbour != nil {
-			densestTree.Neighbour.setAmount(densestTree.Parent.Report.Amount - densestTree.Report.Amount)
-		}
-
-		e.processTree(densestTree)
-		e.processTree(densestTree.Neighbour)
 	}
 }
 
-func (e *Explorer) processTree(
-	tree *ReportTree,
+func (e *Explorer) processReport(
+	report model.Report,
 ) {
-	if tree == nil {
-		return
-	}
-
 	var sendingToDiggerStartTime time.Time
 
-	if tree.Density >= 1 && tree.AreaSize == 1 {
+	if report.Density() >= 1 && report.Area.Size() == 1 {
 		// send to digger chan
 
 		treasureChan := e.treasureReportChan
-		if tree.Density > 1 {
+		if report.Density() > 1 {
 			treasureChan = e.treasureCoordChanUrgent
 		}
 
@@ -266,7 +210,7 @@ func (e *Explorer) processTree(
 			sendingToDiggerStartTime = time.Now()
 		}
 		select {
-		case treasureChan <- tree.Report:
+		case treasureChan <- report:
 			if e.showStat {
 				e.explorerStat.requestTimeMutex.Lock()
 				e.explorerStat.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
@@ -277,60 +221,49 @@ func (e *Explorer) processTree(
 		return
 	}
 
-	if tree.Density > 0 {
-		// set areas
-		if tree.Report.Area.SizeX >= tree.Report.Area.SizeY {
-			tree.Children = append(tree.Children, &ReportTree{
-				Report: model.Report{
-					Area: model.Area{
-						PosX:  tree.Report.Area.PosX,
-						PosY:  tree.Report.Area.PosY,
-						SizeX: tree.Report.Area.SizeX/2 + tree.Report.Area.SizeX%2,
-						SizeY: tree.Report.Area.SizeY,
-					},
-				},
-				Parent: tree,
-			})
-			tree.Children = append(tree.Children, &ReportTree{
-				Report: model.Report{
-					Area: model.Area{
-						PosX:  tree.Report.Area.PosX + tree.Children[0].Report.Area.SizeX,
-						PosY:  tree.Report.Area.PosY,
-						SizeX: tree.Report.Area.SizeX - tree.Children[0].Report.Area.SizeX,
-						SizeY: tree.Report.Area.SizeY,
-					},
-				},
-				Parent: tree,
-			})
-		} else {
-			tree.Children = append(tree.Children, &ReportTree{
-				Report: model.Report{
-					Area: model.Area{
-						PosX:  tree.Report.Area.PosX,
-						PosY:  tree.Report.Area.PosY + tree.Report.Area.SizeY/2,
-						SizeX: tree.Report.Area.SizeX,
-						SizeY: tree.Report.Area.SizeY/2 + tree.Report.Area.SizeY%2,
-					},
-				},
-				Parent: tree,
-			})
-
-			tree.Children = append(tree.Children, &ReportTree{
-				Report: model.Report{
-					Area: model.Area{
-						PosX:  tree.Report.Area.PosX,
-						PosY:  tree.Report.Area.PosY,
-						SizeX: tree.Report.Area.SizeX,
-						SizeY: tree.Report.Area.SizeY - tree.Children[0].Report.Area.SizeY,
-					},
-				},
-				Parent: tree,
-			})
+	if report.Density() > 0 {
+		exploreArea := model.ExploreArea{
+			Index:        atomic.LoadInt64(&e.priorityQueueIndex),
+			ParentReport: report,
 		}
 
-		tree.Children[0].Neighbour = tree.Children[1]
-		tree.Children[1].Neighbour = tree.Children[0]
+		atomic.AddInt64(&e.priorityQueueIndex, 1)
 
-		e.inChan <- tree.Children[0]
+		// set areas
+		if report.Area.SizeX >= report.Area.SizeY {
+			exploreArea.AreaSection1 = model.Area{
+				PosX:  report.Area.PosX,
+				PosY:  report.Area.PosY,
+				SizeX: report.Area.SizeX/2 + report.Area.SizeX%2,
+				SizeY: report.Area.SizeY,
+			}
+
+			exploreArea.AreaSection2 = model.Area{
+				PosX:  report.Area.PosX + exploreArea.AreaSection1.SizeX,
+				PosY:  report.Area.PosY,
+				SizeX: report.Area.SizeX - exploreArea.AreaSection1.SizeX,
+				SizeY: report.Area.SizeY,
+			}
+		} else {
+			exploreArea.AreaSection1 = model.Area{
+				PosX:  report.Area.PosX,
+				PosY:  report.Area.PosY + report.Area.SizeY/2,
+				SizeX: report.Area.SizeX,
+				SizeY: report.Area.SizeY/2 + report.Area.SizeY%2,
+			}
+
+			exploreArea.AreaSection2 = model.Area{
+				PosX:  report.Area.PosX,
+				PosY:  report.Area.PosY,
+				SizeX: report.Area.SizeX,
+				SizeY: report.Area.SizeY - exploreArea.AreaSection1.SizeY,
+			}
+		}
+
+		e.priorityQueueMutex.Lock()
+		heap.Push(
+			&e.priorityQueue, exploreArea,
+		)
+		e.priorityQueueMutex.Unlock()
 	}
 }

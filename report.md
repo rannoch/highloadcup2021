@@ -325,3 +325,46 @@ Layer#	Tot.treas	Tot.treas.val	Avg.treas.val	Treas.dens	Treas.val.dens
 127.0.0.1 - - [2021-03-02 05:23:55] "POST /explore HTTP/1.1" 500 161 1.803753
 Final balance: 156259
 </pre>
+
+<pre>
+*** CLIENT REPORT ***
+Balance:	239578
+Licenses active:	10
+Free licenses issued:	11
+Paid licenses issued:	657
+Paid license expenses:	13762
+Digs allowed by a paid license per coin spent:	2.12360
+Single point explores done:	4706
+Single point explores with treasures found:	2452
+Single point explore treasure found rate:	0.52104
+Digs done:	29072
+Dig success rate:	0.18430
+Treasures found:	5358
+Total found treasure value:	253536
+Treasures exchanged:	5356
+Total exchanged treasure value:	253340
+Treasure exchange efficiency:	0.99963
+Treasures not exchanged:	2
+
+*** WORLD REPORT ***
+Configuration:	3500 x 3500 x 10
+Total treasures:	476090
+Total treasure value:	22463135
+Avg treasure value:	47.18
+Points with treasure density:	0.03819
+Treasure density:	0.00389
+Treasure value density:	0.18337
+* LAYER STATS *
+Layer#	Tot.treas	Tot.treas.val	Avg.treas.val	Treas.dens	Treas.val.dens
+     1	    45656	       389628	         8.53	   0.00373	       0.03181
+     2	    47175	       807566	        17.12	   0.00385	       0.06592
+     3	    47445	      1210483	        25.51	   0.00387	       0.09881
+     4	    47462	      1621981	        34.17	   0.00387	       0.13241
+     5	    48245	      2052915	        42.55	   0.00394	       0.16758
+     6	    47861	      2447122	        51.13	   0.00391	       0.19977
+     7	    48478	      2910722	        60.04	   0.00396	       0.23761
+     8	    47972	      3266799	        68.10	   0.00392	       0.26668
+     9	    47961	      3679988	        76.73	   0.00392	       0.30041
+    10	    47835	      4075931	        85.21	   0.00390	       0.33273
+Final balance: 239578
+</pre>
