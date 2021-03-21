@@ -27,18 +27,18 @@ func PopCoinsFromWallet() []int32 {
 	var coins []int32
 
 	switch {
-	case len(wallet) >= 21:
-		coins = make([]int32, 21)
-		copy(coins, wallet[:21])
-		wallet = wallet[21:]
-	case len(wallet) >= 11:
-		coins = make([]int32, 11)
-		copy(coins, wallet[:11])
-		wallet = wallet[11:]
-	case len(wallet) >= 6:
-		coins = make([]int32, 6)
-		copy(coins, wallet[:6])
-		wallet = wallet[6:]
+	//case len(wallet) >= 21:
+	//	coins = make([]int32, 21)
+	//	copy(coins, wallet[:21])
+	//	wallet = wallet[21:]
+	//case len(wallet) >= 11:
+	//	coins = make([]int32, 11)
+	//	copy(coins, wallet[:11])
+	//	wallet = wallet[11:]
+	//case len(wallet) >= 6:
+	//	coins = make([]int32, 6)
+	//	copy(coins, wallet[:6])
+	//	wallet = wallet[6:]
 	case len(wallet) >= 1:
 		coins = []int32{wallet[0]}
 		wallet = wallet[1:]
