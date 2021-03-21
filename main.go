@@ -40,7 +40,7 @@ func main() {
 
 	showStat := true
 
-	m := miner.NewMiner(apiClient, 5, 7, 9, 10, showStat)
+	m := miner.NewMiner(apiClient, 5, 7, 7, 5, showStat)
 
 	err = m.Start()
 	fmt.Println(err)

@@ -69,8 +69,8 @@ func NewMiner(
 	m := &Miner{client: client}
 	m.showStat = showStat
 
-	var treasureCoordChan = make(chan model.Report, 10)
-	var treasureCoordChanUrgent = make(chan model.Report, 10)
+	var treasureCoordChan = make(chan model.Report, 100)
+	var treasureCoordChanUrgent = make(chan model.Report, 100)
 
 	var cashierChan = make(chan model.Treasure, 10000)
 	var cashierChanUrgent = make(chan model.Treasure, 10)
