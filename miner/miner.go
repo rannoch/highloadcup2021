@@ -75,12 +75,21 @@ func NewMiner(
 	var cashierChan = make(chan model.Treasure, 10000)
 	var cashierChanUrgent = make(chan model.Treasure, 10)
 
-	var licensorChan = make(chan model.License, 10-licensorsCount)
-
-	m.licensor = NewLicensor(client, licensorChan, licensorsCount, showStat)
+	m.licensor = NewLicensor(client, licensorsCount, showStat)
 
 	for i := 0; i < diggersCount; i++ {
-		m.diggers = append(m.diggers, NewDigger(client, treasureCoordChan, treasureCoordChanUrgent, cashierChan, cashierChanUrgent, m.licensor, showStat))
+		m.diggers = append(
+			m.diggers,
+			NewDigger(
+				client,
+				treasureCoordChan,
+				treasureCoordChanUrgent,
+				cashierChan,
+				cashierChanUrgent,
+				m.licensor,
+				showStat,
+			),
+		)
 	}
 
 	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount, showStat)
@@ -129,7 +138,7 @@ func (miner *Miner) Start() error {
 	miner.healthCheck()
 	go miner.explorer.Start(&wg)
 
-	//miner.licensor.Start()
+	miner.licensor.Start()
 
 	if miner.showStat {
 		go miner.printStat()

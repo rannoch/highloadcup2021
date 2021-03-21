@@ -11,7 +11,12 @@ import (
 type Licensor struct {
 	client *api_client.Client
 
-	getLicenseChan   chan model.License
+	licenses       []model.License
+	licensesCount  int
+	licensesIssued int
+
+	licensesCond     *sync.Cond
+	licensesMutex    sync.RWMutex
 	licenseIssueChan chan interface{}
 
 	workerCount int
@@ -29,13 +34,14 @@ type LicensorStat struct {
 
 func NewLicensor(
 	client *api_client.Client,
-	getLicenseChan chan model.License,
 	workerCount int,
 	showStat bool,
 ) *Licensor {
-	l := &Licensor{client: client, getLicenseChan: getLicenseChan}
+	l := &Licensor{client: client}
 	l.stat.LicensesUsedMap = make(map[int32]int32)
 	l.stat.ResponseCodes = make(map[int]int)
+
+	l.licensesCond = sync.NewCond(&l.licensesMutex)
 
 	l.licenseIssueChan = make(chan interface{}, 10-workerCount)
 	l.workerCount = workerCount
@@ -57,13 +63,29 @@ func (licensor *Licensor) PrintStat(duration time.Duration) {
 }
 
 func (licensor *Licensor) queueLicense() {
+	licensor.licensesIssued++
 	licensor.licenseIssueChan <- true
 }
 
 func (licensor *Licensor) GetLicense() model.License {
-	licensor.queueLicense()
+	licensor.licensesCond.L.Lock()
+	defer licensor.licensesCond.L.Unlock()
+	for len(licensor.licenses) == 0 {
+		licensor.licensesCond.Wait()
+	}
 
-	return <-licensor.getLicenseChan
+	license := licensor.licenses[0]
+
+	licensor.licenses = licensor.licenses[1:]
+
+	return license
+}
+
+func (licensor *Licensor) LicenseExpired() {
+	licensor.licensesMutex.Lock()
+	licensor.licensesCount--
+	licensor.licensesCond.Broadcast()
+	licensor.licensesMutex.Unlock()
 }
 
 func (licensor *Licensor) Init() {
@@ -73,9 +95,20 @@ func (licensor *Licensor) Init() {
 }
 
 func (licensor *Licensor) Start() {
-	for i := 0; i < licensor.workerCount; i++ {
-		licensor.queueLicense()
-	}
+	go func() {
+		for {
+			licensor.licensesCond.L.Lock()
+			for licensor.licensesCount+licensor.licensesIssued == 10 {
+				licensor.licensesCond.Wait()
+			}
+
+			for i := 0; i < 10-licensor.licensesCount-licensor.licensesIssued; i++ {
+				licensor.queueLicense()
+			}
+
+			licensor.licensesCond.L.Unlock()
+		}
+	}()
 }
 
 func (licensor *Licensor) issueLicense() {
@@ -99,7 +132,14 @@ func (licensor *Licensor) issueLicense() {
 						licensor.stat.Mutex.Unlock()
 					}
 
-					licensor.getLicenseChan <- license
+					licensor.licensesMutex.Lock()
+					licensor.licenses = append(licensor.licenses, license)
+					licensor.licensesCount++
+					licensor.licensesIssued--
+
+					licensor.licensesCond.Broadcast()
+					licensor.licensesMutex.Unlock()
+
 					break
 				}
 				if respCode == 409 {

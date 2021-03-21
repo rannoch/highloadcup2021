@@ -106,7 +106,7 @@ func (digger *Digger) dig(report model.Report) {
 			getLicenseStartTime = time.Now()
 		}
 		for !digger.hasActiveLicense() {
-			digger.license = digger.getLicense()
+			digger.license = digger.licensor.GetLicense()
 		}
 		if digger.showStat {
 			DiggerStat.mutex.Lock()
@@ -135,7 +135,6 @@ func (digger *Digger) dig(report model.Report) {
 		}
 
 		if digRespCode == 403 {
-			digger.license.DigAllowed = 0
 			continue
 		}
 
@@ -145,6 +144,10 @@ func (digger *Digger) dig(report model.Report) {
 
 		depth++
 		digger.license.DigUsed++
+
+		if !digger.hasActiveLicense() {
+			digger.licensor.LicenseExpired()
+		}
 
 		if digRespCode == 404 {
 			continue
