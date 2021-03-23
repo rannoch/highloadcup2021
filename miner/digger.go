@@ -158,16 +158,16 @@ func (digger *Digger) dig(report model.Report) {
 		}
 
 		if len(treasureIds) > 0 {
-			if digger.showStat {
-				DiggerStat.mutex.Lock()
-				DiggerStat.TreasuresTotal++
-				DiggerStat.mutex.Unlock()
-			}
-
 			left = left - int32(len(treasureIds))
 
 			if depth < 4 {
 				continue
+			}
+
+			if digger.showStat {
+				DiggerStat.mutex.Lock()
+				DiggerStat.TreasuresTotal++
+				DiggerStat.mutex.Unlock()
 			}
 
 			for i := range treasureIds {
@@ -182,7 +182,7 @@ func (digger *Digger) dig(report model.Report) {
 
 				cashierChan := digger.cashierChan
 
-				if treasure.Depth > 5 {
+				if treasure.Depth > 8 {
 					cashierChan = digger.cashierChanUrgent
 				}
 

@@ -72,8 +72,8 @@ func NewMiner(
 	var treasureCoordChan = make(chan model.Report, 100)
 	var treasureCoordChanUrgent = make(chan model.Report, 100)
 
-	var cashierChan = make(chan model.Treasure, 10000)
-	var cashierChanUrgent = make(chan model.Treasure, 10)
+	var cashierChan = make(chan model.Treasure, 1000)
+	var cashierChanUrgent = make(chan model.Treasure, 100)
 
 	m.licensor = NewLicensor(client, licensorsCount, showStat)
 
