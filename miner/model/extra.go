@@ -5,7 +5,7 @@ func (r Report) Density() float32 {
 		return 0
 	}
 
-	return float32(r.Amount) / float32(r.Area.SizeX*r.Area.SizeY)
+	return float32(r.Amount) / float32(r.Area.Size())
 }
 
 func (a Area) Size() int32 {

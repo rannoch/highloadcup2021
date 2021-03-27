@@ -9,6 +9,7 @@ if __name__ == '__main__':
     print(np.max(arr))
     print(np.min(arr))
     print(np.sum(arr))
+    print(len(arr))
 
     arr = np.sort(arr)
 

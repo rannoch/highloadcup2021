@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+var depths = map[int32]bool{
+	1:  false,
+	2:  false,
+	3:  true,
+	4:  true,
+	5:  true,
+	6:  true,
+	7:  true,
+	8:  true,
+	9:  true,
+	10: true,
+}
+
 var DiggerStat = diggerStat{
 	ResponseCodes: make(map[int]int),
 }
@@ -16,6 +29,7 @@ var DiggerStat = diggerStat{
 type diggerStat struct {
 	mutex                    sync.RWMutex
 	TreasuresTotal           int
+	TreasuresSentToCashier   int
 	CashierChanWaitTimeTotal time.Duration
 	GetLicenseStartTimeTotal time.Duration
 	ResponseCodes            map[int]int
@@ -23,7 +37,7 @@ type diggerStat struct {
 
 func (d *diggerStat) printStat(duration time.Duration) {
 	d.mutex.RLock()
-	println("Digger treasures total after " + duration.String() + " " + strconv.Itoa(d.TreasuresTotal))
+	println("Digger treasures total after " + duration.String() + " - " + strconv.Itoa(d.TreasuresTotal) + ", sent to cashier - " + strconv.Itoa(d.TreasuresSentToCashier))
 	println("Digger wait for cashier total after " + duration.String() + " " + d.CashierChanWaitTimeTotal.String())
 	println("Digger wait for license total after " + duration.String() + " " + d.GetLicenseStartTimeTotal.String())
 	responseCodesJson, _ := json.Marshal(d.ResponseCodes)
@@ -158,32 +172,30 @@ func (digger *Digger) dig(report model.Report) {
 		}
 
 		if len(treasureIds) > 0 {
-			left = left - int32(len(treasureIds))
-
-			if depth < 4 {
-				continue
-			}
-
 			if digger.showStat {
 				DiggerStat.mutex.Lock()
-				DiggerStat.TreasuresTotal++
+				DiggerStat.TreasuresTotal += len(treasureIds)
 				DiggerStat.mutex.Unlock()
 			}
 
-			for i := range treasureIds {
-				if digger.showStat {
-					sendingToCashierStartTime = time.Now()
-				}
+			left = left - int32(len(treasureIds))
 
+			for i := range treasureIds {
 				treasure := model.Treasure{
 					Id:    treasureIds[i],
+					PosX:  report.Area.PosX,
+					PosY:  report.Area.PosY,
 					Depth: depth - 1,
+				}
+
+				if !depths[treasure.Depth] {
+					continue
 				}
 
 				cashierChan := digger.cashierChan
 
-				if treasure.Depth > 8 {
-					cashierChan = digger.cashierChanUrgent
+				if digger.showStat {
+					sendingToCashierStartTime = time.Now()
 				}
 
 				select {
@@ -191,6 +203,7 @@ func (digger *Digger) dig(report model.Report) {
 					if digger.showStat {
 						DiggerStat.mutex.Lock()
 						DiggerStat.CashierChanWaitTimeTotal += time.Now().Sub(sendingToCashierStartTime)
+						DiggerStat.TreasuresSentToCashier++
 						DiggerStat.mutex.Unlock()
 					}
 				}

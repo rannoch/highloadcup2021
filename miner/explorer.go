@@ -92,19 +92,20 @@ func NewExplorer(
 }
 
 func (e *Explorer) Init() {
-	const part int32 = 5
+	const xPart int32 = 5
+	const yPart int32 = 5
 	const xSize = 3500
 	const ySize = 3500
 
-	var xStep = xSize / part
-	var yStep = ySize / part
+	var xStep = xSize / xPart
+	var yStep = ySize / xPart
 
 	var i int32
 	// calculate initial
-	for i = 0; i < part*part; i++ {
+	for i = 0; i < xPart*yPart; i++ {
 		area := model.Area{
-			PosX:  i % part * xStep,
-			PosY:  i / part * yStep,
+			PosX:  i % xPart * xStep,
+			PosY:  i / yPart * yStep,
 			SizeX: xStep,
 			SizeY: yStep,
 		}

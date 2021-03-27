@@ -1,7 +1,12 @@
 package model
 
 type Treasure struct {
-	Id          string
-	Depth       int32
+	Id string
+
+	PosX int32
+	PosY int32
+
+	Depth int32
+
 	CoinsAmount int32
 }

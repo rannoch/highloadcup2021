@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
+var json = jsoniter.ConfigFastest
 
 type Client struct {
 	httpClient *fasthttp.Client
