@@ -66,8 +66,8 @@ func (c *cashierStat) printStat(duration time.Duration) {
 	//depthTreasureSamplesJson, _ := json.Marshal(c.DepthTreasuresSamples)
 	//println("Cashier depth treasures samples: " + string(depthTreasureSamplesJson))
 
-	depthCoinsSamplesJson, _ := json.Marshal(c.DepthCoinsSamples)
-	println("Cashier depth coins samples: " + string(depthCoinsSamplesJson))
+	//depthCoinsSamplesJson, _ := json.Marshal(c.DepthCoinsSamples)
+	//println("Cashier depth coins samples: " + string(depthCoinsSamplesJson))
 
 	c.mutex.RUnlock()
 	println()

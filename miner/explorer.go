@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/rannoch/highloadcup2021/api_client"
 	"github.com/rannoch/highloadcup2021/miner/model"
+	"github.com/rannoch/highloadcup2021/util"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -235,6 +236,8 @@ func (e *Explorer) processReport(
 
 		atomic.AddInt64(&e.priorityQueueIndex, 1)
 
+		areaLowerPowerOfTwoSize := util.LowerPowerOfTwo(report.Area.Size() / 2)
+
 		// set areas
 		if report.Area.SizeX >= report.Area.SizeY {
 			exploreArea.AreaSection1 = model.Area{
@@ -242,6 +245,13 @@ func (e *Explorer) processReport(
 				PosY:  report.Area.PosY,
 				SizeX: report.Area.SizeX/2 + report.Area.SizeX%2,
 				SizeY: report.Area.SizeY,
+			}
+
+			for exploreArea.AreaSection1.SizeX > 1 &&
+				exploreArea.AreaSection1.Size() > 2 &&
+				exploreArea.AreaSection1.Size() > areaLowerPowerOfTwoSize {
+
+				exploreArea.AreaSection1.SizeX--
 			}
 
 			exploreArea.AreaSection2 = model.Area{
@@ -253,14 +263,20 @@ func (e *Explorer) processReport(
 		} else {
 			exploreArea.AreaSection1 = model.Area{
 				PosX:  report.Area.PosX,
-				PosY:  report.Area.PosY + report.Area.SizeY/2,
+				PosY:  report.Area.PosY,
 				SizeX: report.Area.SizeX,
 				SizeY: report.Area.SizeY/2 + report.Area.SizeY%2,
 			}
 
+			for exploreArea.AreaSection1.SizeY > 1 &&
+				exploreArea.AreaSection1.Size() > 2 &&
+				exploreArea.AreaSection1.Size() > areaLowerPowerOfTwoSize {
+				exploreArea.AreaSection1.SizeY--
+			}
+
 			exploreArea.AreaSection2 = model.Area{
 				PosX:  report.Area.PosX,
-				PosY:  report.Area.PosY,
+				PosY:  report.Area.PosY + exploreArea.AreaSection1.SizeY,
 				SizeX: report.Area.SizeX,
 				SizeY: report.Area.SizeY - exploreArea.AreaSection1.SizeY,
 			}

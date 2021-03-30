@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -74,18 +75,37 @@ func main() {
 			}
 
 			if len(treasureIds) > 0 {
-				for _, treasureId := range treasureIds {
-					for {
-						coins, _, err := apiClient.Cash(`"` + treasureId + `"`)
-						if err == nil {
-							println(treasure.Depth, len(coins))
-
-							break
-						}
-					}
-				}
+				//for _, treasureId := range treasureIds {
+				//	for {
+				//		coins, _, err := apiClient.Cash(`"` + treasureId + `"`)
+				//		if err == nil {
+				//			println(treasure.Depth, len(coins))
+				//
+				//			break
+				//		}
+				//	}
+				//}
 
 				left--
+			}
+		}
+	}
+
+	sort.Slice(treasures, func(i, j int) bool {
+		return i < j
+	})
+
+	for _, treasure := range treasures {
+		for {
+			coins, code, err := apiClient.Cash(`"` + treasure.Id + `"`)
+			if code == 409 {
+				break
+			}
+
+			if err == nil {
+				println(treasure.Depth, len(coins))
+
+				break
 			}
 		}
 	}
