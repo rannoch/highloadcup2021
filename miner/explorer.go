@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"github.com/rannoch/highloadcup2021/api_client"
 	"github.com/rannoch/highloadcup2021/miner/model"
-	"github.com/rannoch/highloadcup2021/util"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -236,50 +235,54 @@ func (e *Explorer) processReport(
 
 		atomic.AddInt64(&e.priorityQueueIndex, 1)
 
-		areaLowerPowerOfTwoSize := util.LowerPowerOfTwo(report.Area.Size() / 2)
+		variant1AreaSection1 := model.Area{
+			PosX:  report.Area.PosX,
+			PosY:  report.Area.PosY,
+			SizeX: report.Area.SizeX / 2,
+			SizeY: report.Area.SizeY,
+		}
 
-		// set areas
-		if report.Area.SizeX >= report.Area.SizeY {
-			exploreArea.AreaSection1 = model.Area{
-				PosX:  report.Area.PosX,
-				PosY:  report.Area.PosY,
-				SizeX: report.Area.SizeX/2 + report.Area.SizeX%2,
-				SizeY: report.Area.SizeY,
+		variant1AreaSection2 := model.Area{
+			PosX:  report.Area.PosX + variant1AreaSection1.SizeX,
+			PosY:  report.Area.PosY,
+			SizeX: report.Area.SizeX - variant1AreaSection1.SizeX,
+			SizeY: report.Area.SizeY,
+		}
+
+		variant2AreaSection1 := model.Area{
+			PosX:  report.Area.PosX,
+			PosY:  report.Area.PosY,
+			SizeX: report.Area.SizeX,
+			SizeY: report.Area.SizeY / 2,
+		}
+
+		variant2AreaSection2 := model.Area{
+			PosX:  report.Area.PosX,
+			PosY:  report.Area.PosY + variant2AreaSection1.SizeY,
+			SizeX: report.Area.SizeX,
+			SizeY: report.Area.SizeY - variant2AreaSection1.SizeY,
+		}
+
+		if variant1AreaSection1.Size() == 0 || variant1AreaSection2.Size() == 0 {
+			exploreArea.AreaSection1 = variant2AreaSection1
+			exploreArea.AreaSection2 = variant2AreaSection2
+		} else if variant2AreaSection1.Size() == 0 || variant2AreaSection2.Size() == 0 {
+			exploreArea.AreaSection1 = variant1AreaSection1
+			exploreArea.AreaSection2 = variant1AreaSection2
+		} else if variant1AreaSection1.ExploreCost()+variant1AreaSection2.ExploreCost() == variant2AreaSection1.ExploreCost()+variant2AreaSection2.ExploreCost() {
+			if math.Abs(float64(variant1AreaSection1.ExploreCost()-variant1AreaSection2.ExploreCost())) < math.Abs(float64(variant2AreaSection1.ExploreCost()-variant2AreaSection2.ExploreCost())) {
+				exploreArea.AreaSection1 = variant1AreaSection1
+				exploreArea.AreaSection2 = variant1AreaSection2
+			} else {
+				exploreArea.AreaSection1 = variant2AreaSection1
+				exploreArea.AreaSection2 = variant2AreaSection2
 			}
-
-			for exploreArea.AreaSection1.SizeX > 1 &&
-				exploreArea.AreaSection1.Size() > 2 &&
-				exploreArea.AreaSection1.Size() > areaLowerPowerOfTwoSize {
-
-				exploreArea.AreaSection1.SizeX--
-			}
-
-			exploreArea.AreaSection2 = model.Area{
-				PosX:  report.Area.PosX + exploreArea.AreaSection1.SizeX,
-				PosY:  report.Area.PosY,
-				SizeX: report.Area.SizeX - exploreArea.AreaSection1.SizeX,
-				SizeY: report.Area.SizeY,
-			}
+		} else if variant1AreaSection1.ExploreCost()+variant1AreaSection2.ExploreCost() < variant2AreaSection1.ExploreCost()+variant2AreaSection2.ExploreCost() {
+			exploreArea.AreaSection1 = variant1AreaSection1
+			exploreArea.AreaSection2 = variant1AreaSection2
 		} else {
-			exploreArea.AreaSection1 = model.Area{
-				PosX:  report.Area.PosX,
-				PosY:  report.Area.PosY,
-				SizeX: report.Area.SizeX,
-				SizeY: report.Area.SizeY/2 + report.Area.SizeY%2,
-			}
-
-			for exploreArea.AreaSection1.SizeY > 1 &&
-				exploreArea.AreaSection1.Size() > 2 &&
-				exploreArea.AreaSection1.Size() > areaLowerPowerOfTwoSize {
-				exploreArea.AreaSection1.SizeY--
-			}
-
-			exploreArea.AreaSection2 = model.Area{
-				PosX:  report.Area.PosX,
-				PosY:  report.Area.PosY + exploreArea.AreaSection1.SizeY,
-				SizeX: report.Area.SizeX,
-				SizeY: report.Area.SizeY - exploreArea.AreaSection1.SizeY,
-			}
+			exploreArea.AreaSection1 = variant2AreaSection1
+			exploreArea.AreaSection2 = variant2AreaSection2
 		}
 
 		e.priorityQueueMutex.Lock()
