@@ -16,9 +16,9 @@ var CashierStat = cashierStat{
 	DepthCoinsMin:         make(map[int32]int32, 10),
 	DepthCoinsMax:         make(map[int32]int32, 10),
 	DepthTreasuresAmount:  make(map[int32]int32, 10),
-	DepthTreasuresSamples: make(map[int32][]model.Treasure),
+	DepthTreasuresSamples: make([]model.Treasure, 0, 100),
 
-	DepthCoinsSamples: make([]map[int32]int32, 0, 100),
+	DepthCoinsSamples: make([][2]int32, 0, 500),
 }
 
 type cashierStat struct {
@@ -31,9 +31,9 @@ type cashierStat struct {
 	DepthCoinsMax map[int32]int32
 
 	DepthTreasuresAmount  map[int32]int32
-	DepthTreasuresSamples map[int32][]model.Treasure
+	DepthTreasuresSamples []model.Treasure
 
-	DepthCoinsSamples []map[int32]int32
+	DepthCoinsSamples [][2]int32
 }
 
 func (c *cashierStat) printStat(duration time.Duration) {
@@ -65,7 +65,7 @@ func (c *cashierStat) printStat(duration time.Duration) {
 
 	//depthTreasureSamplesJson, _ := json.Marshal(c.DepthTreasuresSamples)
 	//println("Cashier depth treasures samples: " + string(depthTreasureSamplesJson))
-
+	//
 	//depthCoinsSamplesJson, _ := json.Marshal(c.DepthCoinsSamples)
 	//println("Cashier depth coins samples: " + string(depthCoinsSamplesJson))
 
@@ -84,14 +84,13 @@ type Cashier struct {
 
 func NewCashier(
 	client *api_client.Client,
-	treasureChan, treasureChanUrgent <-chan model.Treasure,
+	treasureChan <-chan model.Treasure,
 	showStat bool,
 ) *Cashier {
 	return &Cashier{
-		client:             client,
-		treasureChan:       treasureChan,
-		treasureChanUrgent: treasureChanUrgent,
-		showStat:           showStat,
+		client:       client,
+		treasureChan: treasureChan,
+		showStat:     showStat,
 	}
 }
 
@@ -100,15 +99,8 @@ func (cashier *Cashier) Start(wg *sync.WaitGroup) {
 
 	for {
 		select {
-		case treasure := <-cashier.treasureChanUrgent:
+		case treasure := <-cashier.treasureChan:
 			cashier.cash(treasure)
-		default:
-			select {
-			case treasure := <-cashier.treasureChanUrgent:
-				cashier.cash(treasure)
-			case treasure := <-cashier.treasureChan:
-				cashier.cash(treasure)
-			}
 		}
 	}
 }
@@ -138,12 +130,12 @@ func (cashier *Cashier) cash(treasure model.Treasure) {
 
 				CashierStat.DepthTreasuresAmount[treasure.Depth]++
 
-				if len(CashierStat.DepthTreasuresSamples[treasure.Depth]) < 4 {
-					CashierStat.DepthTreasuresSamples[treasure.Depth] = append(CashierStat.DepthTreasuresSamples[treasure.Depth], treasure)
+				if len(CashierStat.DepthTreasuresSamples) < 100 {
+					CashierStat.DepthTreasuresSamples = append(CashierStat.DepthTreasuresSamples, treasure)
 				}
 
-				if len(CashierStat.DepthCoinsSamples) < 100 {
-					CashierStat.DepthCoinsSamples = append(CashierStat.DepthCoinsSamples, map[int32]int32{treasure.Depth: treasure.CoinsAmount})
+				if len(CashierStat.DepthCoinsSamples) < 10 {
+					CashierStat.DepthCoinsSamples = append(CashierStat.DepthCoinsSamples, [2]int32{treasure.Depth, treasure.CoinsAmount})
 				}
 
 				CashierStat.TreasuresTotal++

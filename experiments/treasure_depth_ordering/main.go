@@ -37,10 +37,9 @@ func main() {
 		panic(err)
 	}
 
-	//
-	//sort.Slice(treasures, func(i, j int) bool {
-	//	return treasures[i].Depth < treasures[j].Depth
-	//})
+	sort.Slice(treasures, func(i, j int) bool {
+		return treasures[i].Depth > treasures[j].Depth
+	})
 
 	license := model.License{}
 
@@ -91,9 +90,11 @@ func main() {
 		}
 	}
 
-	sort.Slice(treasures, func(i, j int) bool {
-		return i < j
-	})
+	//sort.Slice(treasures, func(i, j int) bool {
+	//	return i < j
+	//})
+
+	var depthCoinsSamples [][2]int32
 
 	for _, treasure := range treasures {
 		for {
@@ -103,12 +104,15 @@ func main() {
 			}
 
 			if err == nil {
-				println(treasure.Depth, len(coins))
+				depthCoinsSamples = append(depthCoinsSamples, [2]int32{treasure.Depth, int32(len(coins))})
 
 				break
 			}
 		}
 	}
+
+	depthCoinsSamplesJson, _ := json.Marshal(depthCoinsSamples)
+	println("Cashier depth coins samples: " + string(depthCoinsSamplesJson))
 }
 
 func getLicense(client *api_client.Client) model.License {

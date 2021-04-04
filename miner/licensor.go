@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const workerPerLicense = 3
+
 type Licensor struct {
 	client *api_client.Client
 
@@ -17,7 +19,9 @@ type Licensor struct {
 
 	licensesCond     *sync.Cond
 	licensesMutex    sync.RWMutex
-	licenseIssueChan chan interface{}
+	licenseIssueChan chan chan struct{}
+
+	licenseIssuerGlobalCancelChan chan struct{}
 
 	workerCount int
 
@@ -43,7 +47,9 @@ func NewLicensor(
 
 	l.licensesCond = sync.NewCond(&l.licensesMutex)
 
-	l.licenseIssueChan = make(chan interface{}, 10-workerCount)
+	l.licenseIssueChan = make(chan chan struct{}, workerCount)
+	l.licenseIssuerGlobalCancelChan = make(chan struct{}, workerCount)
+
 	l.workerCount = workerCount
 	l.showStat = showStat
 
@@ -64,7 +70,12 @@ func (licensor *Licensor) PrintStat(duration time.Duration) {
 
 func (licensor *Licensor) queueLicense() {
 	licensor.licensesIssued++
-	licensor.licenseIssueChan <- true
+	cancelChan := make(chan struct{}, workerPerLicense)
+	for i := 0; i < workerPerLicense; i++ {
+		select {
+		case licensor.licenseIssueChan <- cancelChan:
+		}
+	}
 }
 
 func (licensor *Licensor) GetLicense() model.License {
@@ -114,38 +125,71 @@ func (licensor *Licensor) Start() {
 func (licensor *Licensor) issueLicense() {
 	for {
 		select {
-		case <-licensor.licenseIssueChan:
-			coinsFromWallet := PopCoinsFromWallet()
-
+		case groupCancelChan := <-licensor.licenseIssueChan:
+		main:
 			for {
-				license, respCode, _ := licensor.client.IssueLicense(coinsFromWallet)
-				if licensor.showStat {
-					licensor.stat.Mutex.Lock()
-					licensor.stat.ResponseCodes[respCode]++
-					licensor.stat.Mutex.Unlock()
-				}
+				select {
+				case <-groupCancelChan:
+					break main
+				case <-licensor.licenseIssuerGlobalCancelChan:
+					break main
+				default:
+					//licensor.licensesMutex.RLock()
+					//licensesCount := len(licensor.licenses)
+					//licensor.licensesMutex.RUnlock()
+					//if licensesCount == 10 {
+					//	break main
+					//}
 
-				if respCode == 200 {
+					license, respCode, _ := licensor.client.IssueLicense([]int32{})
 					if licensor.showStat {
 						licensor.stat.Mutex.Lock()
-						licensor.stat.LicensesUsedMap[license.DigAllowed]++
+						licensor.stat.ResponseCodes[respCode]++
 						licensor.stat.Mutex.Unlock()
 					}
 
-					licensor.licensesMutex.Lock()
-					licensor.licenses = append(licensor.licenses, license)
-					licensor.licensesCount++
-					licensor.licensesIssued--
+					if respCode == 200 {
+						if licensor.showStat {
+							licensor.stat.Mutex.Lock()
+							licensor.stat.LicensesUsedMap[license.DigAllowed]++
+							licensor.stat.Mutex.Unlock()
+						}
 
-					licensor.licensesCond.Broadcast()
-					licensor.licensesMutex.Unlock()
+						licensor.licensesMutex.Lock()
+						licensor.licenses = append(licensor.licenses, license)
+						licensor.licensesCount++
+						licensor.licensesIssued--
 
-					break
-				}
-				if respCode == 409 {
-					continue
+						if len(licensor.licenses) == 10 {
+							licensor.cancelAllIssuers()
+						}
+
+						licensor.licensesCond.Broadcast()
+						licensor.licensesMutex.Unlock()
+
+						for i := 0; i < workerPerLicense; i++ {
+							select {
+							case groupCancelChan <- struct{}{}:
+							default:
+								//println("licensor 200 break default")
+							}
+						}
+					}
+					if respCode == 409 {
+						licensor.cancelAllIssuers()
+					}
 				}
 			}
+		}
+	}
+}
+
+func (licensor *Licensor) cancelAllIssuers() {
+	for i := 0; i < licensor.workerCount; i++ {
+		select {
+		case licensor.licenseIssuerGlobalCancelChan <- struct{}{}:
+		default:
+
 		}
 	}
 }

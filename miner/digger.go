@@ -67,7 +67,6 @@ func NewDigger(
 	treasureReportChan <-chan model.Report,
 	treasureReportChanUrgent <-chan model.Report,
 	cashierChan chan<- model.Treasure,
-	cashierChanUrgent chan<- model.Treasure,
 	licensor *Licensor,
 	showStat bool,
 ) *Digger {
@@ -76,7 +75,6 @@ func NewDigger(
 		treasureReportChan:       treasureReportChan,
 		treasureReportChanUrgent: treasureReportChanUrgent,
 		cashierChan:              cashierChan,
-		cashierChanUrgent:        cashierChanUrgent,
 		licensor:                 licensor,
 		showStat:                 showStat,
 	}

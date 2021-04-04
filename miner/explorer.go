@@ -62,9 +62,12 @@ func (p *PriorityQueue) Pop() interface{} {
 }
 
 type explorerStat struct {
-	requestsTotal       int64
-	requestTimeByArea   map[int32]time.Duration
-	requestCountByArea  map[int32]int64
+	requestsTotal      int64
+	requestTimeByArea  map[int32]time.Duration
+	requestCountByArea map[int32]int64
+
+	treasuresTotal int64
+
 	diggerWaitTimeTotal time.Duration
 
 	requestTimeMutex sync.RWMutex
@@ -98,14 +101,14 @@ func (e *Explorer) Init() {
 	const ySize = 3500
 
 	var xStep = xSize / xPart
-	var yStep = ySize / xPart
+	var yStep = ySize / yPart
 
 	var i int32
 	// calculate initial
 	for i = 0; i < xPart*yPart; i++ {
 		area := model.Area{
 			PosX:  i % xPart * xStep,
-			PosY:  i / yPart * yStep,
+			PosY:  i / xPart * yStep,
 			SizeX: xStep,
 			SizeY: yStep,
 		}
@@ -133,7 +136,7 @@ func (e *Explorer) PrintStat(duration time.Duration) {
 	e.explorerStat.requestTimeMutex.RLock()
 	requestTimeString, _ := json.Marshal(e.explorerStat.requestTimeByArea)
 
-	println("Explores total after "+duration.String(), e.explorerStat.requestsTotal)
+	println("Explores total after "+duration.String(), e.explorerStat.requestsTotal, ",treasures found", e.explorerStat.treasuresTotal)
 
 	println("Explore requests time by area stat after " + duration.String())
 	println(string(requestTimeString))
@@ -165,6 +168,11 @@ func (e *Explorer) explore(
 
 	for {
 		e.priorityQueueMutex.Lock()
+		if e.priorityQueue.Len() == 0 {
+			e.priorityQueueMutex.Unlock()
+			continue
+		}
+
 		exploreArea := heap.Pop(&e.priorityQueue).(model.ExploreArea)
 		e.priorityQueueMutex.Unlock()
 
@@ -219,6 +227,7 @@ func (e *Explorer) processReport(
 		case treasureChan <- report:
 			if e.showStat {
 				e.explorerStat.requestTimeMutex.Lock()
+				e.explorerStat.treasuresTotal++
 				e.explorerStat.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
 				e.explorerStat.requestTimeMutex.Unlock()
 			}

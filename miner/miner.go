@@ -39,9 +39,9 @@ func PopCoinsFromWallet() []int32 {
 	//	coins = make([]int32, 6)
 	//	copy(coins, wallet[:6])
 	//	wallet = wallet[6:]
-	case len(wallet) >= 1:
-		coins = []int32{wallet[0]}
-		wallet = wallet[1:]
+	//case len(wallet) >= 1:
+	//	coins = []int32{wallet[0]}
+	//	wallet = wallet[1:]
 	default:
 		coins = []int32{}
 	}
@@ -56,13 +56,15 @@ type Miner struct {
 
 	cashiers []*Cashier
 
-	client *api_client.Client
+	client            *api_client.Client
+	clientForLicensor *api_client.Client
 
 	showStat bool
 }
 
 func NewMiner(
 	client *api_client.Client,
+	clientForLicensor *api_client.Client,
 	diggersCount, cashiersCount, explorersCount, licensorsCount int,
 	showStat bool,
 ) *Miner {
@@ -72,10 +74,9 @@ func NewMiner(
 	var treasureCoordChan = make(chan model.Report, 100)
 	var treasureCoordChanUrgent = make(chan model.Report, 100)
 
-	var cashierChan = make(chan model.Treasure, 1000)
-	var cashierChanUrgent = make(chan model.Treasure, 100)
+	var cashierChan = make(chan model.Treasure, 100)
 
-	m.licensor = NewLicensor(client, licensorsCount, showStat)
+	m.licensor = NewLicensor(clientForLicensor, licensorsCount, showStat)
 
 	for i := 0; i < diggersCount; i++ {
 		m.diggers = append(
@@ -85,7 +86,6 @@ func NewMiner(
 				treasureCoordChan,
 				treasureCoordChanUrgent,
 				cashierChan,
-				cashierChanUrgent,
 				m.licensor,
 				showStat,
 			),
@@ -95,7 +95,7 @@ func NewMiner(
 	m.explorer = NewExplorer(client, treasureCoordChan, treasureCoordChanUrgent, explorersCount, showStat)
 
 	for i := 0; i < cashiersCount; i++ {
-		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan, cashierChanUrgent, showStat))
+		m.cashiers = append(m.cashiers, NewCashier(client, cashierChan, showStat))
 	}
 
 	return m

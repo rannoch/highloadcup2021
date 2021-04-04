@@ -38,9 +38,19 @@ func main() {
 	//apiClient.Debug = true
 	//apiClient.Slowlog = time.Second
 
+	apiClientForLicensor := api_client.NewClient(&fasthttp.Client{}, urlParsed.String())
+
 	showStat := true
 
-	m := miner.NewMiner(apiClient, 5, 7, 7, 5, showStat)
+	m := miner.NewMiner(
+		apiClient,
+		apiClientForLicensor,
+		5,
+		7,
+		7,
+		30,
+		showStat,
+	)
 
 	err = m.Start()
 	fmt.Println(err)
