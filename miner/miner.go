@@ -117,8 +117,6 @@ func (miner *Miner) healthCheck() {
 }
 
 func (miner *Miner) Start() error {
-	miner.licensor.Init()
-
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -138,11 +136,11 @@ func (miner *Miner) Start() error {
 	miner.healthCheck()
 	go miner.explorer.Start(&wg)
 
-	miner.licensor.Start()
-
 	if miner.showStat {
 		go miner.printStat()
 	}
+
+	miner.licensor.Start()
 
 	wg.Wait()
 

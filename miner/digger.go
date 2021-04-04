@@ -157,10 +157,6 @@ func (digger *Digger) dig(report model.Report) {
 		depth++
 		digger.license.DigUsed++
 
-		if !digger.hasActiveLicense() {
-			digger.licensor.LicenseExpired()
-		}
-
 		if digRespCode == 404 {
 			continue
 		}
