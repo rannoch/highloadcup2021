@@ -205,18 +205,3 @@ func (digger *Digger) dig(report model.Report) {
 		}
 	}
 }
-
-func (digger *Digger) getLicense() model.License {
-	coinsFromWallet := PopCoinsFromWallet()
-
-	for {
-		license, respCode, _ := digger.client.IssueLicense(coinsFromWallet)
-		if respCode == 409 {
-			continue
-		}
-
-		if respCode == 200 {
-			return license
-		}
-	}
-}

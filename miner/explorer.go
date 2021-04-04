@@ -95,10 +95,10 @@ func NewExplorer(
 }
 
 func (e *Explorer) Init() {
-	const xPart int32 = 5
-	const yPart int32 = 5
-	const xSize = 3500
-	const ySize = 3500
+	const xPart int32 = 4
+	const yPart int32 = 4
+	const xSize = 3072
+	const ySize = 2560
 
 	var xStep = xSize / xPart
 	var yStep = ySize / yPart

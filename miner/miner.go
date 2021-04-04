@@ -56,8 +56,7 @@ type Miner struct {
 
 	cashiers []*Cashier
 
-	client            *api_client.Client
-	clientForLicensor *api_client.Client
+	client *api_client.Client
 
 	showStat bool
 }
