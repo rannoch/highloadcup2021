@@ -64,6 +64,7 @@ type Miner struct {
 func NewMiner(
 	client *api_client.Client,
 	clientForLicensor *api_client.Client,
+	clientForDigger *api_client.Client,
 	diggersCount, cashiersCount, explorersCount, licensorsCount int,
 	showStat bool,
 ) *Miner {
@@ -81,7 +82,7 @@ func NewMiner(
 		m.diggers = append(
 			m.diggers,
 			NewDigger(
-				client,
+				clientForDigger,
 				treasureCoordChan,
 				treasureCoordChanUrgent,
 				cashierChan,

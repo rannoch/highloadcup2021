@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/rannoch/highloadcup2021/api_client"
-	"github.com/rannoch/highloadcup2021/model"
+	"github.com/rannoch/highloadcup2021/miner/model"
 	"github.com/valyala/fasthttp"
 	"log"
 	"net/http"

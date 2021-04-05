@@ -66,7 +66,10 @@ type explorerStat struct {
 	requestTimeByArea  map[int32]time.Duration
 	requestCountByArea map[int32]int64
 
-	treasuresTotal int64
+	responseCodes map[int]int
+
+	treasuresTotal      int64
+	treasureDoubleTotal map[int32]int32
 
 	diggerWaitTimeTotal time.Duration
 
@@ -84,6 +87,8 @@ func NewExplorer(
 
 	e.explorerStat.requestTimeByArea = make(map[int32]time.Duration)
 	e.explorerStat.requestCountByArea = make(map[int32]int64)
+	e.explorerStat.responseCodes = make(map[int]int)
+	e.explorerStat.treasureDoubleTotal = make(map[int32]int32)
 
 	e.priorityQueue = make([]model.ExploreArea, 0, 10000)
 
@@ -134,10 +139,15 @@ func (e *Explorer) Start(wg *sync.WaitGroup) {
 
 func (e *Explorer) PrintStat(duration time.Duration) {
 	e.explorerStat.requestTimeMutex.RLock()
+
+	println("Explores total after "+duration.String(), e.explorerStat.requestsTotal, ",treasure cells found -", e.explorerStat.treasuresTotal)
+	responseCodesJson, _ := json.Marshal(e.explorerStat.responseCodes)
+	println("Explore response codes: " + string(responseCodesJson))
+
+	treasureDoubleTotalJson, _ := json.Marshal(e.explorerStat.treasureDoubleTotal)
+	println("Double treasures: " + string(treasureDoubleTotalJson))
+
 	requestTimeString, _ := json.Marshal(e.explorerStat.requestTimeByArea)
-
-	println("Explores total after "+duration.String(), e.explorerStat.requestsTotal, ",treasures found", e.explorerStat.treasuresTotal)
-
 	println("Explore requests time by area stat after " + duration.String())
 	println(string(requestTimeString))
 
@@ -186,6 +196,7 @@ func (e *Explorer) explore(
 				e.explorerStat.requestsTotal++
 				e.explorerStat.requestTimeByArea[exploreArea.AreaSection1.Size()] += requestTime
 				e.explorerStat.requestCountByArea[exploreArea.AreaSection1.Size()]++
+				e.explorerStat.responseCodes[respCode]++
 				e.explorerStat.requestTimeMutex.Unlock()
 			}
 
@@ -207,32 +218,47 @@ func (e *Explorer) explore(
 	}
 }
 
+func (e *Explorer) sendReport(report model.Report) {
+	var sendingToDiggerStartTime time.Time
+
+	if e.showStat {
+		sendingToDiggerStartTime = time.Now()
+	}
+
+	treasureReportChan := e.treasureReportChan
+	if report.Density() > 1 {
+		treasureReportChan = e.treasureCoordChanUrgent
+	}
+
+	select {
+	case treasureReportChan <- report:
+		if e.showStat {
+			e.explorerStat.requestTimeMutex.Lock()
+			e.explorerStat.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
+			e.explorerStat.requestTimeMutex.Unlock()
+		}
+	}
+}
+
 func (e *Explorer) processReport(
 	report model.Report,
 ) {
-	var sendingToDiggerStartTime time.Time
-
 	if report.Density() >= 1 && report.Area.Size() == 1 {
-		// send to digger chan
-
-		treasureChan := e.treasureReportChan
-		if report.Density() > 1 {
-			treasureChan = e.treasureCoordChanUrgent
-		}
-
 		if e.showStat {
-			sendingToDiggerStartTime = time.Now()
+			e.explorerStat.requestTimeMutex.Lock()
+			e.explorerStat.treasuresTotal++
+			e.explorerStat.requestTimeMutex.Unlock()
 		}
-		select {
-		case treasureChan <- report:
+
+		if report.Density() > 1 {
 			if e.showStat {
 				e.explorerStat.requestTimeMutex.Lock()
-				e.explorerStat.treasuresTotal++
-				e.explorerStat.diggerWaitTimeTotal += time.Now().Sub(sendingToDiggerStartTime)
+				e.explorerStat.treasureDoubleTotal[int32(report.Density())]++
 				e.explorerStat.requestTimeMutex.Unlock()
 			}
 		}
 
+		e.sendReport(report)
 		return
 	}
 

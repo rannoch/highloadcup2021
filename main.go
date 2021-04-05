@@ -40,12 +40,15 @@ func main() {
 
 	apiClientForLicensor := api_client.NewClient(&fasthttp.Client{}, urlParsed.String())
 
+	apiClientForDigger := api_client.NewClient(&fasthttp.Client{}, urlParsed.String())
+
 	showStat := true
 
 	m := miner.NewMiner(
 		apiClient,
 		apiClientForLicensor,
-		5,
+		apiClientForDigger,
+		7,
 		7,
 		7,
 		30,
